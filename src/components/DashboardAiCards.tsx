@@ -30,7 +30,7 @@ const formatValue=(value:number,format:DashboardCard['displayFormat'])=>{
 const VisualCard:React.FC<{card:DashboardCard;preview?:CardPreview;loading?:boolean;onRemove?:(id:string)=>void}> = ({card,preview,loading,onRemove}) => {
   const rows=preview?.series||[];
   const max=Math.max(1,...rows.map(row=>row.value),...rows.map(row=>row.previousValue||0));
-  const colours=['#0848ef','#825be8','#13a783','#e5a23f','#e16b85','#28a7c7','#7184a6'];
+  const colours=['#789cff','#ad91ff','#4ad6ad','#f2bf66','#f28ba6','#62c8df','#a7b4cc'];
   const width=card.width==='large'?'xl:col-span-4':card.width==='medium'?'xl:col-span-2':'xl:col-span-1';
   const points=rows.map((row,index)=>({x:rows.length<=1?300:28+index/(rows.length-1)*544,y:148-row.value/max*118,label:row.label,value:row.value}));
   const pointString=points.map(p=>p.x+','+p.y).join(' ');
@@ -40,12 +40,12 @@ const VisualCard:React.FC<{card:DashboardCard;preview?:CardPreview;loading?:bool
   const total=rows.reduce((sum,row)=>sum+Math.max(0,row.value),0);
   let cursor=0;
   const pieStops=rows.map((row,index)=>{const end=cursor+(total?row.value/total*100:0);const part=colours[index%colours.length]+' '+cursor+'% '+end+'%';cursor=end;return part;});
-  return <section className={`group relative min-w-0 overflow-hidden rounded-xl border border-[#dfe5f0] bg-white p-4 shadow-[0_1px_3px_rgba(8,11,50,.035)] sm:p-5 ${width}`}>
+  return <section className={`dashboard-ai-card group relative min-w-0 overflow-hidden rounded-xl border border-[#dfe5f0] bg-white p-4 shadow-[0_1px_3px_rgba(8,11,50,.035)] sm:p-5 ${width}`}>
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <div className="mb-1 flex flex-wrap items-center gap-1.5">
-          <span className="rounded-md bg-[#eaf0ff] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[.08em] text-[#0848ef]">AI card</span>
-          <span className="text-[8px] font-semibold uppercase tracking-[.08em] text-slate-400">{card.chartType} · {RANGE_LABEL[card.dateRange]}</span>
+          <span className="rounded-md bg-[#eaf0ff] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[.08em] text-[#0848ef]">AI card</span>
+          <span className="text-[9px] font-semibold uppercase tracking-[.08em] text-slate-400">{card.chartType} · {RANGE_LABEL[card.dateRange]}</span>
         </div>
         <h3 className="truncate text-[13px] font-bold tracking-[-.02em] text-[#080b32]">{card.title}</h3>
         <p className="mt-1 line-clamp-2 text-[10px] text-slate-400">{card.description}</p>
@@ -55,8 +55,8 @@ const VisualCard:React.FC<{card:DashboardCard;preview?:CardPreview;loading?:bool
     {loading?<div className="mt-5 flex h-36 items-center justify-center gap-2 text-[10px] font-medium text-slate-400"><Activity className="h-4 w-4 animate-pulse text-[#0848ef]"/>Updating live workspace data…</div>
     :!preview?<div className="mt-5 flex h-36 items-center justify-center text-[10px] text-slate-400">Preview data is currently unavailable.</div>
     :card.chartType==='kpi'?<div className="mt-5 flex min-h-[108px] items-end justify-between gap-3">
-      <div><div className="text-[30px] font-bold leading-none tracking-[-.05em] text-[#080b32] tabular-nums">{formatValue(preview.value||0,card.displayFormat)}</div>
-        {preview.previousValue!==undefined&&<div className={`mt-2 text-[9px] font-semibold ${preview.changePercent===null?'text-slate-400':preview.changePercent>=0?'text-emerald-600':'text-rose-600'}`}>{preview.changePercent===null?'No previous-period baseline':`${preview.changePercent>=0?'+':''}${preview.changePercent}% vs previous period`}</div>}
+      <div><div className="dashboard-ai-kpi-value text-[22px] font-bold leading-none tracking-[-.035em] text-[#080b32] tabular-nums">{formatValue(preview.value||0,card.displayFormat)}</div>
+        {preview.previousValue!==undefined&&<div className={`mt-2 text-[10px] font-semibold ${preview.changePercent===null?'text-slate-400':preview.changePercent>=0?'text-emerald-600':'text-rose-600'}`}>{preview.changePercent===null?'No previous-period baseline':`${preview.changePercent>=0?'+':''}${preview.changePercent}% vs previous period`}</div>}
       </div><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#eaf0ff] text-[#0848ef]"><Activity className="h-5 w-5"/></div>
     </div>
     :(card.chartType==='line'||card.chartType==='area')?<div className="mt-4">
@@ -64,11 +64,11 @@ const VisualCard:React.FC<{card:DashboardCard;preview?:CardPreview;loading?:bool
         {[40,80,120,160].map(y=><line key={y} x1="20" y1={y} x2="580" y2={y} stroke="#edf1f7" strokeDasharray="3 5"/>)}
         {card.chartType==='area'&&<path d={areaPath} fill="rgba(8,72,239,.12)"/>}
         {card.comparePrevious&&<polyline points={previousPointString} fill="none" stroke="#9ba8bd" strokeWidth="2" strokeDasharray="6 5" strokeLinecap="round" strokeLinejoin="round"/>}
-        <polyline points={pointString} fill="none" stroke="#0848ef" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-        {points.map((point,index)=><circle key={index} cx={point.x} cy={point.y} r="4" fill="#fff" stroke="#0848ef" strokeWidth="2"/>)}
+        <polyline points={pointString} fill="none" stroke="#789cff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+        {points.map((point,index)=><circle key={index} cx={point.x} cy={point.y} r="4" fill="#fff" stroke="#789cff" strokeWidth="2"/>)}
       </svg>:<div className="flex h-36 items-center justify-center text-[10px] text-slate-400">No records in this date range yet.</div>}
       {card.comparePrevious&&<div className="mb-1 flex items-center gap-3 text-[8px] text-slate-400"><span className="inline-flex items-center gap-1"><i className="h-1.5 w-3 rounded-full bg-[#0848ef]"/>Selected period</span><span className="inline-flex items-center gap-1"><i className="h-1.5 w-3 rounded-full bg-slate-400"/>Previous period</span></div>}
-      <div className="mt-1 flex justify-between gap-2 text-[8px] font-medium text-slate-400">{rows.map((row,index)=><span key={index} className="min-w-0 truncate">{row.label}</span>)}</div>
+      <div className="mt-1 flex justify-between gap-2 text-[9px] font-medium text-slate-400">{rows.map((row,index)=><span key={index} className="min-w-0 truncate">{row.label}</span>)}</div>
     </div>
     :card.chartType==='bar'?<div className="mt-5 space-y-3">
       {rows.slice(0,8).map((row,index)=><div key={row.label} className="min-w-0">
@@ -178,17 +178,17 @@ export const DashboardAiCards:React.FC<Props>=({tenantId, canUseAi})=>{
 
   return <section className="dashboard-ai-cards space-y-3">
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div><h2 className="text-[15px] font-bold tracking-[-.025em] text-[#080b32]">Your dashboard cards</h2><p className="mt-1 text-[11px] text-slate-400">AI creates the visualization and every card setting from your prompt, using this workspace’s live data.</p></div>
+      <div><h2 className="dashboard-ai-section-heading text-[15px] font-bold tracking-[-.025em] text-[#080b32]">Your dashboard cards</h2><p className="dashboard-ai-section-description mt-1 text-[11px] text-slate-400">AI creates the visualization and every card setting from your prompt, using this workspace’s live data.</p></div>
       <div className="flex items-center gap-2">
         <button type="button" onClick={()=>setRefreshToken(value=>value+1)} title="Refresh dashboard cards" aria-label="Refresh dashboard cards" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-[#b9caff] hover:bg-[#f3f6ff] hover:text-[#0848ef]"><RefreshCw className="h-3.5 w-3.5"/></button>
-        {canUseAi && <button type="button" onClick={()=>{setOpen(true);setError('');setGenerated(null);setGeneratedPreview(null);}} className="inline-flex items-center gap-2 rounded-lg bg-[#0848ef] px-3.5 py-2.5 text-[10px] font-bold text-white shadow-sm transition hover:bg-[#063bc7]"><Plus className="h-3.5 w-3.5"/>Add card with AI</button>}
+        {canUseAi && <button type="button" onClick={()=>{setOpen(true);setError('');setGenerated(null);setGeneratedPreview(null);}} className="inline-flex items-center gap-2 rounded-lg bg-[#155eef] px-3.5 py-2.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-[#0d4ed6]"><Plus className="h-3.5 w-3.5"/>Add card with AI</button>}
       </div>
     </div>
     {loading?<div className="rounded-xl border border-slate-200 bg-white px-4 py-8 text-center text-[11px] text-slate-400"><Activity className="mx-auto mb-2 h-5 w-5 animate-pulse text-[#0848ef]"/>Loading your saved dashboard cards…</div>
     :cards.length?<div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">{ordered.map(card=><VisualCard key={card.id} card={card} preview={previews[card.id]} onRemove={canUseAi ? remove : undefined}/>)}</div>
     :canUseAi ? <button type="button" onClick={()=>{setOpen(true);setError('');}} className="group flex min-h-[145px] w-full flex-col items-center justify-center rounded-xl border border-dashed border-[#b9caff] bg-white px-5 py-7 text-center transition hover:border-[#0848ef] hover:bg-[#f8faff]">
       <span className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-[#eaf0ff] text-[#0848ef] transition group-hover:scale-105"><Plus className="h-5 w-5"/></span>
-      <span className="text-[12px] font-bold text-[#17213d]">Create your first AI dashboard card</span>
+      <span className="text-[13px] font-bold text-[#17213d]">Create your first AI dashboard card</span>
       <span className="mt-1 max-w-md text-[10px] text-slate-400">Describe the metric, trend or comparison. AI chooses the chart, filters, date range and layout.</span>
     </button> : <div className="flex min-h-[145px] w-full flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-[#0a0a2a] px-5 py-7 text-center">
       <span className="text-[12px] font-bold text-slate-100">No custom dashboard cards yet</span>

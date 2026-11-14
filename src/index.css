@@ -4624,3 +4624,49 @@
   .crm-workspace .crm-leads-table tbody tr:not(.crm-empty-row) {grid-template-columns:1fr}
   .crm-workspace .crm-lead-identity {padding-right:28px}
 }
+
+
+/* Dashboard card interiors: dark page, hero, surfaces and dimensions are unchanged. */
+.dashboard-home-view .dashboard-card-heading{color:#f8faff!important;font-size:15px!important;line-height:1.3!important;font-weight:800!important;letter-spacing:-.02em}
+.dashboard-home-view .dashboard-card-description{color:#aebbd4!important;font-size:10px!important;line-height:1.5!important}
+.dashboard-home-view .dashboard-card-subheading{color:#eef3ff!important;font-size:13px!important;font-weight:750!important;line-height:1.35!important}
+.dashboard-home-view .dashboard-card-link{color:#8fb0ff!important;font-size:11px!important;font-weight:750!important}
+.dashboard-home-view .dashboard-card-link:hover{color:#b5cbff!important}
+.dashboard-home-view .dashboard-metric-label{color:#b8c5de!important;font-size:10px!important;line-height:1.35!important;font-weight:650!important}
+.dashboard-home-view .dashboard-metric-value{color:#f8faff!important;font-size:22px!important;line-height:1.1!important;font-weight:820!important;letter-spacing:-.035em}
+.dashboard-home-view .dashboard-metric-note{color:#9eacc8!important;font-size:10px!important;line-height:1.4!important}
+.dashboard-home-view .dashboard-card-icon{color:#9bb7ff!important;background:rgba(95,139,255,.17)!important;border:1px solid rgba(139,171,255,.18)}
+.dashboard-home-view .dashboard-pipeline-label{color:#c0cbe0!important;font-size:10px!important;line-height:1.4!important}
+.dashboard-home-view .dashboard-pipeline-label span:last-child{color:#eaf0ff!important;font-size:11px!important;font-weight:750!important}
+.dashboard-home-view .dashboard-pipeline-bar{background:#789cff!important;box-shadow:0 0 10px rgba(120,156,255,.18)}
+.dashboard-home-view .dashboard-activity-label{color:#eef3ff!important;font-size:11px!important;line-height:1.35!important;font-weight:750!important}
+.dashboard-home-view .dashboard-activity-description{color:#a7b4ce!important;font-size:10px!important;line-height:1.4!important}
+.dashboard-home-view .dashboard-activity-value{color:#f4f7ff!important;font-size:13px!important;font-weight:800!important}
+.dashboard-home-view .dashboard-trend-value{color:#c6d2ea!important;font-size:10px!important;font-weight:700!important}
+.dashboard-home-view .dashboard-trend-label{color:#a7b4ce!important;font-size:9px!important;font-weight:650!important}
+.dashboard-home-view .dashboard-trend-bar{background-image:linear-gradient(to top,#5d83ff,#94adff)!important}
+.dashboard-home-view .dashboard-snapshot-row{background:rgba(255,255,255,.045)!important;color:#e7edfa!important;border:1px solid rgba(168,184,222,.09)}
+.dashboard-home-view .dashboard-snapshot-label{color:#c4cfe4!important;font-size:11px!important;font-weight:650!important}
+.dashboard-home-view .dashboard-snapshot-value{color:#f7f9ff!important;font-size:13px!important;font-weight:800!important}
+.dashboard-home-view .dashboard-recent-name{color:#f0f4ff!important;font-size:11px!important;font-weight:750!important}
+.dashboard-home-view .dashboard-recent-meta{color:#a4b1cc!important;font-size:10px!important;line-height:1.35!important}
+.dashboard-home-view .dashboard-recent-date{color:#bac6de!important;font-size:10px!important}
+.dashboard-home-view .dashboard-recent-score{color:#f0f4ff!important;font-size:11px!important;font-weight:800!important}
+.dashboard-home-view .dashboard-content-card .text-slate-400,.dashboard-home-view .dashboard-content-card .text-slate-500{color:#aab7d1!important}
+.dashboard-home-view .dashboard-ai-section-heading{color:#f8faff!important;font-size:15px!important;font-weight:800!important;line-height:1.3!important}
+.dashboard-home-view .dashboard-ai-section-description{color:#aebbd4!important;font-size:11px!important;line-height:1.5!important}
+.dashboard-home-view .dashboard-ai-card h3{color:#f4f7ff!important;font-size:13px!important;font-weight:800!important;line-height:1.35!important}
+.dashboard-home-view .dashboard-ai-card p{color:#aebbd4!important}
+.dashboard-home-view .dashboard-ai-card .dashboard-ai-kpi-value{color:#f8faff!important;font-size:22px!important;font-weight:820!important;line-height:1.1!important;letter-spacing:-.035em}
+.dashboard-home-view .dashboard-ai-card .text-slate-400,.dashboard-home-view .dashboard-ai-card .text-slate-500{color:#a9b7d1!important}
+.dashboard-home-view .dashboard-ai-card .text-slate-600,.dashboard-home-view .dashboard-ai-card .text-slate-700{color:#d5def0!important}
+.dashboard-home-view .dashboard-ai-card .border-slate-100,.dashboard-home-view .dashboard-ai-card .border-slate-200{border-color:#303858!important}
+.dashboard-home-view .dashboard-ai-card .bg-slate-100,.dashboard-home-view .dashboard-ai-card .bg-slate-50{background:#1a2340!important}
+.dashboard-home-view .dashboard-ai-card svg line{stroke:#394665!important}
+.dashboard-home-view .dashboard-ai-cards > div:first-child .text-slate-400{color:#aebbd4!important}
+.dashboard-home-view .dashboard-ai-cards > div:first-child button[aria-label="Refresh dashboard cards"]{border-color:#394665;background:#111b35;color:#b8c7e4}
+.dashboard-home-view .dashboard-ai-cards > div:first-child button[aria-label="Refresh dashboard cards"]:hover{border-color:#7699ef;background:#1a2b50;color:#c4d4ff}
+.dashboard-home-view .dashboard-ai-cards > div:first-child button:not([aria-label="Refresh dashboard cards"]){background:#155eef;color:#fff}
+.dashboard-home-view .dashboard-ai-card .text-emerald-600,.dashboard-home-view .dashboard-ai-card .text-emerald-700{color:#6ee7b7!important}
+.dashboard-home-view .dashboard-ai-card .text-rose-600,.dashboard-home-view .dashboard-ai-card .text-rose-700{color:#fda4af!important}
+.dashboard-home-view .dashboard-ai-card .text-amber-600{color:#fcd38d!important}

@@ -4827,7 +4827,7 @@
 /* Routes with secondary horizontal navigation:
    nav creates the top corners and its bottom line; module canvas continues
    the side borders and closes the same frame with rounded bottom corners. */
-.app-main-frame--with-module-nav > .app-workspace-nav-frame {
+.app-main-frame--with-module-nav .app-workspace-nav-frame {
   box-sizing: border-box;
   flex: 0 0 auto;
   min-height: 48px;
@@ -4867,7 +4867,7 @@
 }
 
 @media (max-width: 767px) {
-  .app-main-frame--with-module-nav > .app-workspace-nav-frame {
+  .app-main-frame--with-module-nav .app-workspace-nav-frame {
     border-radius: 10px 10px 0 0 !important;
   }
 

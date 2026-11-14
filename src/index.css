@@ -4845,3 +4845,36 @@
     border-radius:10px;
   }
 }
+
+
+/* Consistent frame on every module: navigation strip and content panel are
+   separately rounded surfaces, so modules with tabs keep all four outer corners. */
+.app-workspace-nav-frame {
+  border:1px solid #e1e7f0!important;
+  border-radius:12px!important;
+  border-bottom:1px solid #e1e7f0!important;
+  margin-bottom:8px;
+  background:#fff;
+}
+.app-workspace-content,
+.app-workspace-content.app-workspace-content--dark {
+  border:1px solid #e1e7f0!important;
+  border-radius:12px!important;
+  background-clip:padding-box;
+}
+.app-workspace-content.app-workspace-content--dark {
+  border-color:#2b3454!important;
+}
+@media(max-width:767px) {
+  .app-workspace-nav-frame {
+    border-radius:10px!important;
+    margin-bottom:6px;
+  }
+  .app-workspace-content,
+  .app-workspace-content.app-workspace-content--dark {
+    border-radius:10px!important;
+  }
+  .app-workspace-content.app-workspace-content--dark {
+    border-color:#2b3454!important;
+  }
+}

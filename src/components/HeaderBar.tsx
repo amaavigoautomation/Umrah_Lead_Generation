@@ -356,7 +356,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   const popoverButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[.045] text-slate-300 transition hover:border-white/20 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400';
 
   return (
-    <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-white">
+    <header className="sticky top-0 z-30 shrink-0 border-b-0 bg-white">
       <div className="flex min-h-[56px] items-center justify-between gap-4 bg-[#05051f] px-4 text-white sm:px-6">
         <div className="flex min-w-0 items-center gap-4">
           <div className="min-w-0">
@@ -577,7 +577,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         </div>
       </div>
 
-      {!hideModuleNavigation && <div className="flex min-h-[48px] items-stretch border-t border-slate-200 bg-white">
+      {!hideModuleNavigation && <div className="app-workspace-nav-frame flex min-h-[48px] items-stretch border-t border-slate-200 bg-white">
         <div className="flex w-[154px] shrink-0 flex-col justify-center border-r border-slate-200 px-5">
           <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-[#0848ef]">Workspace</span>
           <span className="mt-0.5 truncate text-[12px] font-bold text-slate-800">{meta.workspaceLabel}</span>

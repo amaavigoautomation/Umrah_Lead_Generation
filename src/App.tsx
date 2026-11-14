@@ -2687,7 +2687,6 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           currentTenant={currentTenant}
           allTenants={allTenants}
           onSwitchTenant={(tenantId) => setCurrentTenantId(tenantId)}
-          contactCount={contacts.length}
           entitlements={entitlements}
           planLocked={planLocked}
           hideModuleNavigation={activeTab === 'inbox' || activeTab === 'dashboard' || activeTab === 'agent'}

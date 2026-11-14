@@ -38,7 +38,6 @@ interface HeaderBarProps {
   currentUser?: AppUser | null;
   onLogout?: () => void;
   currentTenant?: { id: string; name: string; plan?: string; planName?: string; limits?: Record<string, number>; contactLimit?: number; maxContacts?: number } | null;
-  contactCount?: number;
   entitlements?: { planName?: string; limits?: Record<string, number>; billing?: { status?: string; locked?: boolean; graceEndsAt?: string } } | null;
   planLocked?: (tabId: ActiveTab) => boolean;
   allTenants?: { id: string; name: string; plan?: string }[];
@@ -132,7 +131,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   const [activePopover, setActivePopover] = useState<'search' | 'help' | 'account' | null>(null);
   const [appsExpanded, setAppsExpanded] = useState(false);
   const [moduleQuery, setModuleQuery] = useState('');
-  const [usage, setUsage] = useState<{ dailySent: number; dailyLimit: number } | null>(null);
+  const [usage, setUsage] = useState<{ dailyEmailsSent: number; dailyEmailLimit: number; monthlyAiTokens: number; monthlyAiTokenLimit: number } | null>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
   const moduleSearchRef = useRef<HTMLInputElement>(null);
 
@@ -144,15 +143,20 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
     let active = true;
     const loadUsage = async () => {
       try {
-        const todayUtc = new Date().toISOString().slice(0, 10);
-        const params = new URLSearchParams({ from: todayUtc, to: todayUtc });
+        // Match BillingView's default range: current UTC month through today.
+        const now = new Date();
+        const todayUtc = now.toISOString().slice(0, 10);
+        const monthStartUtc = `${todayUtc.slice(0, 8)}01`;
+        const params = new URLSearchParams({ from: monthStartUtc, to: todayUtc });
         const response = await fetch(`/api/tenants/${encodeURIComponent(tenantId)}/usage?${params.toString()}`);
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data?.error || 'Usage unavailable');
         if (active) {
           setUsage({
-            dailySent: Math.max(0, Number(data?.dailyUsage?.emailSentCount) || 0),
-            dailyLimit: Math.max(0, Number(data?.limits?.dailyOutboundSends) || 0),
+            dailyEmailsSent: Math.max(0, Number(data?.dailyUsage?.emailSentCount) || 0),
+            dailyEmailLimit: Math.max(0, Number(data?.limits?.dailyOutboundSends) || 0),
+            monthlyAiTokens: Math.max(0, Number(data?.usage?.aiTotalTokens) || 0),
+            monthlyAiTokenLimit: Math.max(0, Number(data?.limits?.monthlyAiTokens) || 0),
           });
         }
       } catch {
@@ -233,17 +237,13 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   const planLabel = billingStatus === 'trialing'
     ? 'Trial Plan'
     : formattedPlanName.toLowerCase().includes('plan') ? formattedPlanName : `${formattedPlanName} Plan`;
-  const contactLimitRaw =
-    entitlements?.limits?.contacts ??
-    currentTenant?.limits?.contacts ??
-    currentTenant?.contactLimit ??
-    currentTenant?.maxContacts;
-  const contactLimit = Number(contactLimitRaw);
-  const hasContactLimit = contactLimitRaw !== undefined && contactLimitRaw !== null && Number.isFinite(contactLimit) && contactLimit > 0;
-  const sendingLimit = Number(usage?.dailyLimit || entitlements?.limits?.dailyOutboundSends || currentTenant?.limits?.dailyOutboundSends || 0);
-  const dailySent = usage?.dailySent ?? 0;
-  const contactPercent = hasContactLimit ? Math.min(100, Math.round((contactCount / contactLimit) * 100)) : 0;
-  const sendingPercent = sendingLimit > 0 ? Math.min(100, Math.round((dailySent / sendingLimit) * 100)) : 0;
+  // These values mirror BillingView: UTC daily emails and current-month AI tokens.
+  const dailyEmailLimit = Number(usage?.dailyEmailLimit || entitlements?.limits?.dailyOutboundSends || currentTenant?.limits?.dailyOutboundSends || 0);
+  const dailyEmailsSent = usage?.dailyEmailsSent ?? 0;
+  const monthlyAiTokenLimit = Number(usage?.monthlyAiTokenLimit || entitlements?.limits?.monthlyAiTokens || currentTenant?.limits?.monthlyAiTokens || 0);
+  const monthlyAiTokensConsumed = usage?.monthlyAiTokens ?? 0;
+  const dailyEmailPercent = dailyEmailLimit > 0 ? Math.min(100, Math.round((dailyEmailsSent / dailyEmailLimit) * 100)) : 0;
+  const monthlyAiTokenPercent = monthlyAiTokenLimit > 0 ? Math.min(100, Math.round((monthlyAiTokensConsumed / monthlyAiTokenLimit) * 100)) : 0;
   const planTone = billingStatus === 'past_due' || billingStatus === 'awaiting_plan'
     ? 'border-amber-200 bg-amber-50 text-amber-800'
     : billingStatus === 'trialing'
@@ -364,28 +364,32 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                 <div className="space-y-3 border-b border-slate-100 px-4 py-3">
                   <div>
                     <div className="mb-1.5 flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-semibold text-slate-600">Contact limit</span>
+                      <span className="text-[10px] font-semibold text-slate-600">Email limit</span>
                       <span className="text-[10px] font-bold tabular-nums text-slate-800">
-                        {hasContactLimit ? `${contactCount.toLocaleString('en-IN')} / ${contactLimit.toLocaleString('en-IN')}` : `${contactCount.toLocaleString('en-IN')} contacts · No cap`}
+                        {usage
+                          ? `${dailyEmailsSent.toLocaleString('en-IN')} / ${dailyEmailLimit > 0 ? dailyEmailLimit.toLocaleString('en-IN') : 'Unlimited'}`
+                          : 'Loading usage…'}
                       </span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                      <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: (hasContactLimit ? contactPercent : 0) + '%' }} />
+                      <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: dailyEmailPercent + '%' }} />
                     </div>
-                    {!hasContactLimit && <p className="mt-1 text-[9px] text-slate-400">A contact quota is not configured for this workspace.</p>}
+                    <p className="mt-1 text-[9px] text-slate-400">Email sends used today (UTC), same as Billing</p>
                   </div>
 
                   <div>
                     <div className="mb-1.5 flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-semibold text-slate-600">Sending limit</span>
+                      <span className="text-[10px] font-semibold text-slate-600">AI token consumption</span>
                       <span className="text-[10px] font-bold tabular-nums text-slate-800">
-                        {usage ? `${dailySent.toLocaleString('en-IN')} / ${sendingLimit > 0 ? sendingLimit.toLocaleString('en-IN') : 'Unlimited'}` : 'Loading usage…'}
+                        {usage
+                          ? `${monthlyAiTokensConsumed.toLocaleString('en-IN')} / ${monthlyAiTokenLimit > 0 ? monthlyAiTokenLimit.toLocaleString('en-IN') : 'Unlimited'}`
+                          : 'Loading usage…'}
                       </span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                      <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: (sendingLimit > 0 ? sendingPercent : 0) + '%' }} />
+                      <div className="h-full rounded-full bg-[#155eef] transition-all" style={{ width: monthlyAiTokenPercent + '%' }} />
                     </div>
-                    <p className="mt-1 text-[9px] text-slate-400">Email sends used today (UTC)</p>
+                    <p className="mt-1 text-[9px] text-slate-400">AI tokens consumed this month (UTC), same as Billing</p>
                   </div>
                 </div>
 

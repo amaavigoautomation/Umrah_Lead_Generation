@@ -1,24 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { CreditCard, CheckCircle2, AlertTriangle, Loader2, LogOut, ExternalLink } from 'lucide-react';
-import { FEATURES, LIMITS } from '../shared/features';
 import { AI_USAGE_FEATURES, type AiFeatureUsageTotals } from '../shared/aiUsageFeatures';
 
-interface BillingPlan {
-  id: string;
-  name: string;
-  priceMonthly: number;
-  currency: string;
-  features: Record<string, boolean>;
-  limits: Record<string, number>;
-  purchasable: boolean;
-}
 interface BillingState {
   billing: { status: string; locked: boolean; planSource: string; currentPeriodEnd?: string; graceEndsAt?: string };
   planId: string;
   planName: string;
   hasCustomer: boolean;
   stripeConfigured: boolean;
-  plans: BillingPlan[];
 }
 interface TenantUsageState {
   usage: { aiInputTokens?: number; aiOutputTokens?: number; aiTotalTokens?: number; aiCostUsd?: number; aiUnpricedRequestCount?: number; aiModelCostUsd?: number; aiModelUnpricedRequestCount?: number; aiFeatureUsage?: Record<string, AiFeatureUsageTotals>; coldEmailCount?: number; solicitedEmailCount?: number };
@@ -108,7 +97,6 @@ export const BillingView: React.FC<{ fullScreen?: boolean; onLogout?: () => void
 
   const status = state?.billing.status || 'active';
   const note = STATUS_TEXT[status];
-  const subscribed = state?.billing.planSource === 'stripe' && ['active', 'trialing', 'past_due'].includes(status);
   const isCurrentMonthRange = appliedDateRange.from === currentUtcMonthStartKey() && appliedDateRange.to === currentUtcDateKey();
   const selectedEmails = isCurrentMonthRange
     ? (usageState?.usage?.coldEmailCount || 0) + (usageState?.usage?.solicitedEmailCount || 0)
@@ -145,7 +133,7 @@ export const BillingView: React.FC<{ fullScreen?: boolean; onLogout?: () => void
           <CreditCard className="w-5 h-5" />
         </div>
         <div>
-          <h3 className="text-base font-bold text-slate-900">Plan & billing</h3>
+          <h3 className="text-base font-bold text-slate-900">Billing & usage</h3>
           {state && (
             <p className="text-sm text-slate-500">
               Current plan: <span className="font-semibold text-slate-800">{state.planName}</span>
@@ -260,38 +248,15 @@ export const BillingView: React.FC<{ fullScreen?: boolean; onLogout?: () => void
         <div className="text-sm bg-amber-50 border border-amber-100 text-amber-800 rounded-lg px-3 py-2">Online payments aren't enabled on this platform yet.</div>
       )}
 
-      {state && !subscribed && state.billing.planSource !== 'manual' && (
-        <div className="grid gap-3 sm:grid-cols-3">
-          {state.plans.map((p) => (
-            <div key={p.id} className={`rounded-xl border p-4 flex flex-col ${p.id === state.planId ? 'border-orange-300 bg-orange-50/30' : 'border-slate-200 bg-white'}`}>
-              <div className="font-bold text-slate-900">{p.name}</div>
-              <div className="mt-1 text-2xl font-bold text-slate-900">
-                {p.currency === 'USD' ? '$' : `${p.currency} `}
-                {p.priceMonthly}
-                <span className="text-sm font-medium text-slate-500">/mo</span>
-              </div>
-              <ul className="mt-3 space-y-1 text-xs text-slate-600 flex-1">
-                {FEATURES.filter((f) => p.features[f.key] ?? f.defaultEnabled).map((f) => (
-                  <li key={f.key} className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> {f.label}
-                  </li>
-                ))}
-                {LIMITS.filter((l) => p.limits[l.key] !== undefined).map((l) => (
-                  <li key={l.key} className="text-slate-500 pl-5">
-                    {p.limits[l.key].toLocaleString('en-US')} {l.label.toLowerCase()}
-                  </li>
-                ))}
-              </ul>
-              <button
-                disabled={!p.purchasable || !state.stripeConfigured || busy !== null}
-                onClick={() => go(p.id, '/api/billing/checkout', { planId: p.id })}
-                className="mt-4 px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white text-sm font-bold flex items-center justify-center gap-2"
-              >
-                {busy === p.id && <Loader2 className="w-4 h-4 animate-spin" />}
-                {p.purchasable ? 'Choose plan' : 'Not available yet'}
-              </button>
-            </div>
-          ))}
+      {state && ['awaiting_plan', 'canceled'].includes(status) && state.billing.planSource !== 'manual' && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Looking for a plan?</p>
+            <p className="mt-0.5 text-xs text-slate-600">Compare the current plans and included capabilities on our website.</p>
+          </div>
+          <a href="/pricing" className="inline-flex items-center gap-2 rounded-lg bg-[#155eef] px-3.5 py-2 text-xs font-bold text-white hover:bg-[#0d4ed6]">
+            View plans & pricing <ExternalLink className="h-3.5 w-3.5" />
+          </a>
         </div>
       )}
 

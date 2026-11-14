@@ -247,7 +247,7 @@ export const WorkspaceView: React.FC<SettingsViewProps> = ({
     ] : []),
     ...(canEditEmail ? [
       { id: 'team' as const, label: 'Team & Permissions', description: 'Workspace users, roles and module access', icon: <Users className="h-4 w-4" /> },
-      { id: 'billing' as const, label: 'Billing & Plan', description: 'Subscription, plan and workspace usage', icon: <CreditCard className="h-4 w-4" /> },
+      { id: 'billing' as const, label: 'Billing & Usage', description: 'Subscription status, invoices and workspace usage', icon: <CreditCard className="h-4 w-4" /> },
     ] : []),
     ...(canAccessAuditLogs ? [
       { id: 'audit' as const, label: 'Audit & Security', description: 'Activity records, compliance and security events', icon: <ShieldCheck className="h-4 w-4" /> },
@@ -947,7 +947,7 @@ export const WorkspaceView: React.FC<SettingsViewProps> = ({
           {activeSection === 'billing' && canEditEmail && (
             <section className="space-y-3">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Billing & Plan</h3>
+                <h3 className="text-sm font-bold text-slate-900">Billing & Usage</h3>
                 <p className="mt-1 text-xs text-slate-500">Manage the subscription, plan status, invoices and workspace usage.</p>
               </div>
               {tenantId && <BillingView tenantId={tenantId} />}

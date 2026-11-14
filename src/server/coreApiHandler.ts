@@ -284,6 +284,7 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
   // =========================================================================
   const isPublicPath =
     url === '/api/health' ||
+    (req.method === 'GET' && url === '/api/public/plans') ||
     // Public asset raw/view streaming for email clients
     (req.method === 'GET' && /^\/api\/assets\/[^/]+\/view$/.test(url)) ||
     // Published legal pages (Privacy, Terms, DPA, AUP) are public by design.
@@ -384,6 +385,32 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     return await handleAgentApi(req, res, activeTenantCtx, body, url);
   }
 
+  // Public read-only plan catalog for the marketing website. Prices and entitlements
+  // come from the same Firestore plans collection managed in the Platform Console.
+  if (url === '/api/public/plans' && req.method === 'GET') {
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    try {
+      const plans = (await listPlans())
+        .filter((p) => p.active)
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          priceMonthly: p.priceMonthly,
+          currency: p.currency,
+          features: p.features,
+          limits: p.limits,
+          sortOrder: p.sortOrder,
+        }));
+      res.statusCode = 200;
+      res.end(JSON.stringify({ plans, features: FEATURES, limits: LIMITS }));
+    } catch (err: any) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err?.message || 'Could not load plans' }));
+    }
+    return true;
+  }
+
   // Billing (workspace admins): /api/billing, /checkout, /portal, /sync
   if (url === '/api/billing' || url.startsWith('/api/billing/')) {
     res.setHeader('Content-Type', 'application/json');
@@ -406,7 +433,6 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
             planName: ent.planName,
             hasCustomer: Boolean(t.stripeCustomerId),
             stripeConfigured: Boolean(billingConfig().secretKey),
-            plans: (await listPlans()).filter((p) => p.active).map((p) => ({ id: p.id, name: p.name, priceMonthly: p.priceMonthly, currency: p.currency, features: p.features, limits: p.limits, purchasable: Boolean(p.stripePriceId) })),
           })
         );
         return true;

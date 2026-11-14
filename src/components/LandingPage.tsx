@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { FEATURES, LIMITS } from '../shared/features';
 import {
   Activity,
   ArrowDown,
@@ -521,13 +522,159 @@ const SolutionsPage: React.FC = () => (
   </main>
 );
 
-const PricingPage: React.FC = () => (
-  <main className="av-subpage av-pricing-page">
-    <section className="av-subhero"><div className="av-hero-lines" /><div className="av-subhero-glow" /><div className="av-container av-subhero-layout"><Reveal><Eyebrow light>PLANS & PRICING</Eyebrow><h1>Choose the capabilities that move your <span>sales operation forward.</span></h1><p>Pricing should reflect the team, channels and usage you actually need. We’ll help map the right workspace configuration for your business.</p><div className="av-subhero-actions"><ButtonLink href={DEMO_URL} external>Request plan details</ButtonLink><a href="/platform" className="av-hero-secondary">Explore platform <ArrowUpRight size={15} /></a></div></Reveal><Reveal className="av-subhero-product"><div className="av-pricing-stack"><div><small>WORKSPACE FOUNDATION</small><b>Leads · Inbox · CRM</b><span><Check size={13} /> One connected operating view</span></div><div><small>SALES AUTOMATION</small><b>AI · Follow-up · Scheduling</b><span><Check size={13} /> Workflows with human control</span></div><div><small>ENGAGEMENT & INSIGHTS</small><b>Campaigns · WhatsApp · Reports</b><span><Check size={13} /> Create, send and learn</span></div></div></Reveal></div></section>
-    <section className="av-pricing-details"><div className="av-container"><Reveal className="av-section-heading"><Eyebrow>A PLAN THAT FITS YOUR WORKFLOW</Eyebrow><h2>Start with your sales process.<br /><span>Build the right workspace around it.</span></h2><p>Rather than showing unverified prices or feature limits, we’ll confirm the current plan, allowances and available integrations against your actual requirements.</p></Reveal><div className="av-pricing-models"><article><small>01 / FOUNDATION</small><h3>Capture & organise</h3><p>For teams bringing inbound enquiries, conversations and lead records into one operating view.</p><ul><li><Check /> Lead capture and CRM</li><li><Check /> Unified Inbox</li><li><Check /> Lead databases</li><li><Check /> Workspace and team setup</li></ul><a href={DEMO_URL} target="_blank" rel="noreferrer">Discuss this setup <ArrowUpRight size={14} /></a></article><article className="is-featured"><span className="av-model-tag">SALES AUTOMATION</span><small>02 / GROWTH</small><h3>Qualify & convert</h3><p>For teams bringing AI assistance, follow-up and demo scheduling into the customer journey.</p><ul><li><Check /> Everything in Foundation</li><li><Check /> AI Agent and handoff modes</li><li><Check /> Automated follow-up</li><li><Check /> Demo scheduling</li></ul><a href={DEMO_URL} target="_blank" rel="noreferrer">Discuss this setup <ArrowUpRight size={14} /></a></article><article><small>03 / ENGAGEMENT</small><h3>Campaigns & insights</h3><p>For teams managing branded communication, larger audiences and campaign reporting.</p><ul><li><Check /> Email Design Studio</li><li><Check /> WhatsApp Template Studio</li><li><Check /> Campaigns and audience snapshots</li><li><Check /> Campaign reports and AI insights</li></ul><a href={DEMO_URL} target="_blank" rel="noreferrer">Discuss this setup <ArrowUpRight size={14} /></a></article></div><div className="av-pricing-transparency"><ShieldCheck size={18} /><div><b>Clear usage. No made-up allowances.</b><p>Final subscription pricing and entitlements are confirmed from the current workspace plan configuration. AI costs depend on the models and actual tokens used. WhatsApp provider charges are separate and subject to Meta’s current pricing and account setup.</p></div></div></div></section>
-    <FinalCta title="Let’s find the right setup for your sales process." body="Tell us how leads arrive, how your team responds and what you want to automate. We’ll map the right Amaavigo workspace." />
-  </main>
-);
+interface PublicPricingPlan {
+  id: string;
+  name: string;
+  priceMonthly: number;
+  currency: string;
+  features: Record<string, boolean>;
+  limits: Record<string, number>;
+  sortOrder: number;
+}
+interface PublicPricingCatalog {
+  plans: PublicPricingPlan[];
+}
+
+const PricingPage: React.FC = () => {
+  const [plans, setPlans] = useState<PublicPricingPlan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/public/plans', { cache: 'no-store', headers: { Accept: 'application/json' } })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data?.error || 'Could not load plans');
+        return data as PublicPricingCatalog;
+      })
+      .then((data) => {
+        if (!active) return;
+        setPlans(Array.isArray(data.plans) ? data.plans.filter(Boolean).sort((a, b) => a.sortOrder - b.sortOrder) : []);
+        setLoadError('');
+      })
+      .catch((error: any) => {
+        if (active) setLoadError(error?.message || 'Could not load current plans.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
+
+  const formatPrice = (plan: PublicPricingPlan) => {
+    if (!plan.priceMonthly) return 'Free';
+    try {
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: plan.currency || 'USD',
+        maximumFractionDigits: 0,
+      }).format(plan.priceMonthly);
+    } catch {
+      return (plan.currency || '') + ' ' + Number(plan.priceMonthly).toLocaleString('en-IN');
+    }
+  };
+
+  return (
+    <main className="av-subpage av-pricing-page">
+      <section className="av-subhero">
+        <div className="av-hero-lines" /><div className="av-subhero-glow" />
+        <div className="av-container av-subhero-layout">
+          <Reveal>
+            <Eyebrow light>PLANS & PRICING</Eyebrow>
+            <h1>Choose the capabilities that move your <span>sales operation forward.</span></h1>
+            <p>Transparent plans, managed centrally and kept up to date as Amaavigo evolves. Compare the capabilities and allowances available to your team.</p>
+            <div className="av-subhero-actions">
+              <ButtonLink href="/contact">Talk to our team</ButtonLink>
+              <a href="/platform" className="av-hero-secondary">Explore platform <ArrowUpRight size={15} /></a>
+            </div>
+          </Reveal>
+          <Reveal className="av-subhero-product">
+            <div className="av-pricing-stack">
+              <div><small>WORKSPACE FOUNDATION</small><b>Leads · Inbox · CRM</b><span><Check size={13} /> One connected operating view</span></div>
+              <div><small>SALES AUTOMATION</small><b>AI · Follow-up · Scheduling</b><span><Check size={13} /> Workflows with human control</span></div>
+              <div><small>ENGAGEMENT & INSIGHTS</small><b>Campaigns · WhatsApp · Reports</b><span><Check size={13} /> Create, send and learn</span></div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="av-pricing-details av-live-pricing">
+        <div className="av-container">
+          <Reveal className="av-section-heading">
+            <Eyebrow>THE AMAAVIGO PLANS</Eyebrow>
+            <h2>One connected platform.<br /><span>A plan for your next stage.</span></h2>
+            <p>These plans are published directly from the live platform catalog. Feature access and usage allowances reflect the configuration maintained by our Super Admin team.</p>
+          </Reveal>
+
+          {loading ? (
+            <div className="av-live-plan-grid" aria-label="Loading plans">
+              {[0, 1, 2].map((item) => <div className="av-live-plan-skeleton" key={item}><i /><i /><i /><i /><i /></div>)}
+            </div>
+          ) : loadError ? (
+            <div className="av-live-plan-message">
+              <b>We couldn’t load the latest plans.</b>
+              <p>Please refresh this page or contact our team for current pricing.</p>
+              <a href="/contact">Contact Amaavigo <ArrowUpRight size={14} /></a>
+            </div>
+          ) : plans.length === 0 ? (
+            <div className="av-live-plan-message">
+              <b>Plans are being configured.</b>
+              <p>Our team can help you find the right setup for your sales operation.</p>
+              <a href="/contact">Talk to our team <ArrowUpRight size={14} /></a>
+            </div>
+          ) : (
+            <div className="av-live-plan-grid">
+              {plans.map((plan) => {
+                const includedFeatures = FEATURES.filter((feature) => plan.features?.[feature.key] ?? feature.defaultEnabled);
+                const includedLimits = LIMITS.filter((limit) => plan.limits?.[limit.key] !== undefined);
+                return (
+                  <article className="av-live-plan-card" key={plan.id}>
+                    <div className="av-live-plan-topline"><span>AMAAVIGO PLAN</span><i /></div>
+                    <h3>{plan.name}</h3>
+                    <div className="av-live-plan-price">
+                      <strong>{formatPrice(plan)}</strong>
+                      <span>{plan.priceMonthly ? 'per month' : 'free plan'}</span>
+                    </div>
+                    <p className="av-live-plan-summary">A connected workspace with capabilities and allowances configured for this plan.</p>
+                    <div className="av-live-plan-divider" />
+                    <div className="av-live-plan-label">INCLUDED CAPABILITIES</div>
+                    <ul className="av-live-plan-features">
+                      {includedFeatures.map((feature) => (
+                        <li key={feature.key}><CheckCircle2 size={15} /><span>{feature.label}</span></li>
+                      ))}
+                    </ul>
+                    <div className="av-live-plan-divider" />
+                    <div className="av-live-plan-label">USAGE ALLOWANCES</div>
+                    {includedLimits.length > 0 ? (
+                      <ul className="av-live-plan-limits">
+                        {includedLimits.map((limit) => (
+                          <li key={limit.key}><span>{limit.label}</span><b>{Number(plan.limits[limit.key]).toLocaleString('en-IN')} <small>{limit.unit}</small></b></li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="av-live-plan-no-limits">Usage allowances are configured with your workspace.</p>
+                    )}
+                    <a className="av-live-plan-cta" href="/contact">Discuss this plan <ArrowUpRight size={15} /></a>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="av-pricing-transparency">
+            <ShieldCheck size={18} />
+            <div>
+              <b>Clear usage. No made-up allowances.</b>
+              <p>Plan prices, included capabilities and limits are read from the same catalog managed in the Platform Console. AI costs depend on actual model and token usage. WhatsApp provider charges are separate and subject to Meta’s current pricing and account setup.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+      <FinalCta title="Let’s find the right setup for your sales process." body="Tell us how leads arrive, how your team responds and what you want to automate. We’ll map the right Amaavigo workspace." />
+    </main>
+  );
+};
 
 const IntegrationsPage: React.FC = () => (
   <main className="av-subpage"><section className="av-subhero"><div className="av-hero-lines" /><div className="av-subhero-glow" /><div className="av-container av-subhero-layout"><Reveal><Eyebrow light>INTEGRATIONS</Eyebrow><h1>Bring your customer channels into <span>one operating view.</span></h1><p>Connect the messaging, email, calendar and website services your team already uses, subject to provider permissions and eligibility.</p><div className="av-subhero-actions"><ButtonLink href={DEMO_URL} external>Discuss your integrations</ButtonLink></div></Reveal><Reveal className="av-integration-constellation"><div className="av-integration-core">A</div>{[{icon:MessageCircle,label:'WhatsApp',pos:'wa'},{icon:Mail,label:'Email',pos:'email'},{icon:Globe,label:'Website',pos:'web'},{icon:CalendarCheck,label:'Calendar',pos:'calendar'},{icon:Workflow,label:'Webhooks',pos:'hooks'}].map((item) => {const Icon=item.icon;return <span className={'av-integration-node node-' + item.pos} key={item.label}><Icon size={17}/><b>{item.label}</b></span>;})}</Reveal></div></section><section className="av-integration-list"><div className="av-container"><Reveal className="av-section-heading"><Eyebrow>CONNECTED SERVICES</Eyebrow><h2>Work with the channels<br /><span>your customers already know.</span></h2></Reveal><div className="av-integration-grid">{[{icon:MessageCircle,name:'WhatsApp Business',copy:'Supported WhatsApp Business connections and template workflows.'},{icon:Mail,name:'Email',copy:'Connected mailboxes, email sending and campaign communication.'},{icon:Globe,name:'Website',copy:'Website enquiries, forms and chatbot/webhook workflows.'},{icon:CalendarCheck,name:'Google Calendar',copy:'Calendar availability, events and Google Meet scheduling.'},{icon:CalendarClock,name:'Microsoft 365',copy:'Outlook calendar and Teams meeting workflows where configured.'},{icon:Workflow,name:'Webhooks & APIs',copy:'Connect supported external systems to inbound and outbound workflows.'}].map((item,index)=>{const Icon=item.icon;return <Reveal key={item.name} delay={index*.05}><div className="av-integration-card"><span><Icon size={20}/></span><b>{item.name}</b><p>{item.copy}</p></div></Reveal>;})}</div></div></section><FinalCta /></main>

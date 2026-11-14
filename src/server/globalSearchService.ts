@@ -46,10 +46,13 @@ function makeSnippet(data: Record<string, any>, keys: string[], term: string): s
   return (start > 0 ? '…' : '') + match.slice(start, start + 150) + (start + 150 < match.length ? '…' : '');
 }
 
-async function readCollection(ref: any): Promise<Array<{ id: string; data: Record<string, any> }>> {
-  // A bounded scan protects the API from unexpectedly large reads on every keystroke.
+async function readCollection(ref: any): Promise<{ rows: Array<{ id: string; data: Record<string, any> }>; truncated: boolean }> {
+  // Bound each collection scan so broad searches remain responsive and read costs predictable.
   const snap = await getDocs(query(ref, orderByDocumentId(), limit(MAX_DOCS_PER_COLLECTION)));
-  return snap.docs.map((doc: any) => ({ id: doc.id, data: doc.data() as Record<string, any> }));
+  return {
+    rows: snap.docs.map((doc: any) => ({ id: doc.id, data: doc.data() as Record<string, any> })),
+    truncated: snap.docs.length === MAX_DOCS_PER_COLLECTION,
+  };
 }
 
 function canSearchModule(module: SearchModule, allowed: Set<string>, isAdmin: boolean): boolean {
@@ -101,15 +104,16 @@ export async function searchTenantWorkspace(
   let truncated = false;
   const batches = await Promise.all(visibleSpecs.map(async (spec) => {
     try {
-      const rows = await readCollection(spec.ref);
-      return { spec, rows, failed: false };
+      const scanned = await readCollection(spec.ref);
+      return { spec, rows: scanned.rows, truncated: scanned.truncated, failed: false };
     } catch {
-      return { spec, rows: [], failed: true };
+      return { spec, rows: [], truncated: false, failed: true };
     }
   }));
 
   for (const batch of batches) {
     const { spec, rows } = batch;
+    if (batch.truncated) truncated = true;
     for (const row of rows) {
       const categoryCount = categoryCounts.get(spec.category) || 0;
       if (categoryCount >= MAX_RESULTS_PER_CATEGORY) continue;

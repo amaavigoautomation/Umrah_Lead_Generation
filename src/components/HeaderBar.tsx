@@ -278,11 +278,6 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
     });
   }, [currentUser, planLocked]);
 
-  const filteredApps = useMemo(() => {
-    const query = moduleQuery.trim().toLowerCase();
-    return query ? availableApps.filter((item) => item.label.toLowerCase().includes(query)) : availableApps;
-  }, [availableApps, moduleQuery]);
-
   const openPopover = (name: 'search' | 'help' | 'account') => {
     setActivePopover((current) => current === name ? null : name);
     if (name !== 'account') setAppsExpanded(false);

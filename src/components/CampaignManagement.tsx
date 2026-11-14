@@ -463,6 +463,22 @@ export const CampaignManagement: React.FC<CampaignManagementProps> = ({
     // details are loaded by the selectedCampaignId effect
   };
 
+  useEffect(() => {
+    const onGlobalSearchResult = (event: Event) => {
+      const detail = (event as CustomEvent<any>).detail;
+      if (!detail || detail.module !== 'campaigns') return;
+      const match = campaigns.find((campaign) =>
+        campaign.campaignId === detail.recordId ||
+        (campaign as any).id === detail.recordId ||
+        String(campaign.name || '').toLowerCase() === String(detail.title || '').toLowerCase()
+      );
+      if (match) handleSelectCampaign(match);
+      else setSearchQuery(String(detail.title || detail.query || ''));
+    };
+    window.addEventListener('umrah360:global-search-result', onGlobalSearchResult);
+    return () => window.removeEventListener('umrah360:global-search-result', onGlobalSearchResult);
+  }, [campaigns]);
+
   // fetch with a hard timeout so a slow/hung server call can never freeze the page or the poller
   const fetchJsonWithTimeout = async (url: string, init?: RequestInit, timeoutMs = 12000): Promise<any> => {
     const controller = new AbortController();

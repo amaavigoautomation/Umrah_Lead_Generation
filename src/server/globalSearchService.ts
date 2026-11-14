@@ -1,4 +1,4 @@
-import { limit, orderByDocumentId, startAfterId, query, getDocs, where } from './adminFirestore.js';
+import { db, collection, limit, orderByDocumentId, startAfterId, query, getDocs, where } from './adminFirestore.js';
 import { tenantRepo, globalUsersCol } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';
 
@@ -156,8 +156,15 @@ export async function searchTenantWorkspace(
   // Team member search is intentionally limited to the current tenant's own user records.
   if (canSearchModule('workspace', allowed, isAdmin)) {
     try {
-      const members = await getDocs(query(globalUsersCol(), where('tenantId', '==', ctx.tenantId), limit(100)));
-      for (const doc of members.docs) {
+      const [members, legacyMembers] = await Promise.all([
+        getDocs(query(globalUsersCol(), where('tenantId', '==', ctx.tenantId), limit(100))),
+        getDocs(query(collection(db, 'app_users'), where('tenantId', '==', ctx.tenantId), limit(100))),
+      ]);
+      const memberDocs = [...members.docs, ...legacyMembers.docs];
+      const seenMemberIds = new Set<string>();
+      for (const doc of memberDocs) {
+        if (seenMemberIds.has(doc.id)) continue;
+        seenMemberIds.add(doc.id);
         const data = doc.data() as Record<string, any>;
         const blob = [data.name, data.displayName, data.email].map((v) => text(v, 300)).join(' ').toLowerCase();
         if (!blob.includes(term)) continue;

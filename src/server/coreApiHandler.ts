@@ -1085,11 +1085,12 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     try {
       let allowedModules: string[] = [];
       if (activeTenantCtx.role !== 'admin' && !activeTenantCtx.isPlatformAdmin) {
-        const userSnap = await getDoc(globalUserDoc(userUid)).catch(() => null);
-        if (userSnap?.exists()) {
-          const profile = userSnap.data() as Record<string, any>;
-          allowedModules = Array.isArray(profile.allowedModules) ? profile.allowedModules.map(String) : [];
-        }
+        const [userSnap, appUserSnap] = await Promise.all([
+          getDoc(globalUserDoc(userUid)).catch(() => null),
+          getDoc(doc(db, 'app_users', userUid)).catch(() => null),
+        ]);
+        const profile = (userSnap?.exists() ? userSnap.data() : appUserSnap?.exists() ? appUserSnap.data() : {}) as Record<string, any>;
+        allowedModules = Array.isArray(profile.allowedModules) ? profile.allowedModules.map(String) : [];
       }
       const result = await searchTenantWorkspace(activeTenantCtx, searchQuery, allowedModules);
       res.statusCode = 200;

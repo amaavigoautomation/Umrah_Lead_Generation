@@ -902,56 +902,51 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
         {/* 1. TeleCRM Top Header Bar */}
         <div className="crm-header-card bg-white border-b border-slate-200/95 shadow-2xs">
           <div className="crm-page-header max-w-[1700px] mx-auto px-4 py-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-            {/* Logo & Title */}
-            <div className="flex items-center space-x-3">
-              <div className="crm-page-icon w-10 h-10 rounded-xl bg-gradient-to-tr from-orange-500 to-orange-600 flex items-center justify-center text-white shadow-md shadow-orange-500/20">
-                <PhoneCall className="w-5 h-5" />
+            {/* CRM page identity */}
+            <div className="crm-page-copy flex min-w-0 items-center gap-3">
+              <div className="crm-page-icon w-10 h-10 rounded-xl flex items-center justify-center shrink-0">
+                <Users className="w-5 h-5" />
               </div>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">Lead management</h1>
-                  <span className="crm-lead-count px-2 py-0.5 text-[11px] font-bold bg-slate-100 text-slate-700 rounded-md">
-                    {processedLeads.length.toLocaleString()} matching leads
-                  </span>
+              <div className="min-w-0">
+                <span className="crm-page-eyebrow">WORKSPACE / CUSTOMER MANAGEMENT</span>
+                <div className="crm-page-title-row flex items-center gap-2">
+                  <h1>CRM</h1>
+                  <span className="crm-lead-count">{processedLeads.length.toLocaleString()} matching leads</span>
                 </div>
-                <p className="text-xs text-slate-500 font-medium">
-                  Keep every enquiry, conversation and next step organized in one place.
-                </p>
+                <p>Manage leads, track pipeline progress, and coordinate every customer follow-up in one place.</p>
               </div>
             </div>
 
-            {/* Action Buttons */}
+            {/* Existing CRM actions, presented in the shared workspace order */}
             <div className="crm-header-actions flex items-center space-x-2 self-stretch md:self-auto flex-wrap gap-y-2">
-              <button
-                onClick={() => {
-                  setAddLeadMode('BULK');
-                  setIsAddLeadModalOpen(true);
-                }}
-                className="crm-secondary-action flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors"
-                title="Import leads from CSV or Excel"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Import leads</span>
-              </button>
-              <button
-                onClick={handleExportCsv}
-                className="crm-secondary-action flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors"
-                title="Export filtered leads to Excel/CSV"
-              >
-                <Download className="w-3.5 h-3.5 text-slate-600" />
-                <span>Export CSV</span>
-              </button>
-
-              {/* Add Lead Button */}
               <button
                 onClick={() => {
                   setAddLeadMode('SINGLE');
                   setIsAddLeadModalOpen(true);
                 }}
-                className="crm-primary-action flex items-center space-x-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-lg shadow-sm shadow-orange-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                className="crm-primary-action flex items-center space-x-1.5 px-4 py-2 text-xs font-bold rounded-lg"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
                 <span>Add Lead</span>
+              </button>
+              <button
+                onClick={() => {
+                  setAddLeadMode('BULK');
+                  setIsAddLeadModalOpen(true);
+                }}
+                className="crm-secondary-action flex items-center space-x-1.5 px-3 py-2 text-xs font-semibold rounded-lg"
+                title="Import leads from CSV or Excel"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Import Leads</span>
+              </button>
+              <button
+                onClick={handleExportCsv}
+                className="crm-secondary-action flex items-center space-x-1.5 px-3 py-2 text-xs font-semibold rounded-lg"
+                title="Export filtered leads to Excel/CSV"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export</span>
               </button>
             </div>
           </div>

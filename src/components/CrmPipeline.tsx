@@ -1224,88 +1224,56 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
           </div>
           <div className="crm-table-scroll overflow-x-auto">
             <table className="crm-leads-table w-full text-left border-collapse">
+              <colgroup>
+                <col style={{ width: '3%' }} />
+                <col style={{ width: '22%' }} />
+                <col style={{ width: '15%' }} />
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '14%' }} />
+                <col style={{ width: '13%' }} />
+                <col style={{ width: '11%' }} />
+                <col style={{ width: '10%' }} />
+              </colgroup>
               <thead>
-                <tr className="bg-slate-100/80 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider select-none">
-                  <th className="py-3 px-3 w-10 text-center">
-                    <button
-                      onClick={handleSelectAll}
-                      className="text-slate-500 hover:text-slate-800 transition-colors"
-                      title="Select all"
-                    >
-                      {paginatedLeads.length > 0 && paginatedLeads.every((l) => selectedLeadIds.has(l.leadId)) ? (
-                        <CheckSquare className="w-4 h-4 text-orange-600" />
-                      ) : (
-                        <Square className="w-4 h-4" />
-                      )}
+                <tr className="bg-slate-100/80 border-b border-slate-200 text-[9px] font-bold text-slate-600 uppercase tracking-wider select-none">
+                  <th className="crm-select-column">
+                    <button onClick={handleSelectAll} className="text-slate-500 hover:text-slate-800 transition-colors" title="Select all leads on this page">
+                      {paginatedLeads.length > 0 && paginatedLeads.every((lead) => selectedLeadIds.has(lead.leadId))
+                        ? <CheckSquare className="w-4 h-4 text-blue-600" />
+                        : <Square className="w-4 h-4" />}
                     </button>
                   </th>
-                  <th
-                    className="py-3 px-3 cursor-pointer hover:text-slate-900 min-w-[140px]"
-                    onClick={() => {
-                      if (sortField === 'date') setSortAsc(!sortAsc);
-                      else {
-                        setSortField('date');
-                        setSortAsc(false);
-                      }
-                    }}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>Date & Time</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                      {sortField === 'date' && (
-                        <span className="text-orange-600 font-extrabold">{sortAsc ? '↑' : '↓'}</span>
-                      )}
-                    </div>
+                  <th className="crm-sortable-heading" onClick={() => {
+                    if (sortField === 'date') setSortAsc(!sortAsc);
+                    else { setSortField('date'); setSortAsc(false); }
+                  }}>
+                    <span>Lead / Contact</span>
+                    <span className="crm-heading-sort">{sortField === 'date' ? (sortAsc ? '↑' : '↓') : <ArrowUpDown className="w-3 h-3" />}</span>
                   </th>
-                  <th className="py-3 px-2" title="Lead / Contact">Lead / Contact</th>
-                  <th className="py-3 px-2" title="Phone and communication actions">Phone & Actions</th>
-                  <th className="py-3 px-2" title="Lead status">Status</th>
-                  <th
-                    className="py-3 px-3 cursor-pointer hover:text-slate-900 min-w-[170px]"
-                    onClick={() => {
-                      if (sortField === 'followup') setSortAsc(!sortAsc);
-                      else {
-                        setSortField('followup');
-                        setSortAsc(true);
-                      }
-                    }}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>Follow-up</span>
-                      <Clock className="w-3 h-3 text-slate-400" />
-                      {sortField === 'followup' && (
-                        <span className="text-orange-600 font-extrabold">{sortAsc ? '↑' : '↓'}</span>
-                      )}
-                    </div>
+                  <th>Phone & Actions</th>
+                  <th>Status</th>
+                  <th className="crm-sortable-heading" onClick={() => {
+                    if (sortField === 'followup') setSortAsc(!sortAsc);
+                    else { setSortField('followup'); setSortAsc(true); }
+                  }}>
+                    <span>Follow-up</span>
+                    <span className="crm-heading-sort">{sortField === 'followup' ? (sortAsc ? '↑' : '↓') : <ArrowUpDown className="w-3 h-3" />}</span>
                   </th>
-                  <th className="py-3 px-2" title="Assigned telecaller">Assigned To</th>
-                  <th className="py-3 px-2" title="Lead source">Source</th>
-                  <th
-                    className="py-3 px-3 cursor-pointer hover:text-slate-900 min-w-[110px]"
-                    onClick={() => {
-                      if (sortField === 'score') setSortAsc(!sortAsc);
-                      else {
-                        setSortField('score');
-                        setSortAsc(false);
-                      }
-                    }}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>AI Score</span>
-                      <Flame className="w-3 h-3 text-orange-400" />
-                      {sortField === 'score' && (
-                        <span className="text-orange-600 font-extrabold">{sortAsc ? '↑' : '↓'}</span>
-                      )}
-                    </div>
+                  <th>Assigned To</th>
+                  <th className="crm-sortable-heading" onClick={() => {
+                    if (sortField === 'score') setSortAsc(!sortAsc);
+                    else { setSortField('score'); setSortAsc(false); }
+                  }}>
+                    <span>Source / Score</span>
+                    <span className="crm-heading-sort">{sortField === 'score' ? (sortAsc ? '↑' : '↓') : <ArrowUpDown className="w-3 h-3" />}</span>
                   </th>
-                  <th className="py-3 px-2" title="Latest note">Note</th>
-                  <th className="py-3 px-2 text-center" title="Lead actions">View</th>
+                  <th>Note / Profile</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
                 {processedLeads.length === 0 ? (
-                  <tr>
-                    <td colSpan={11} className="py-16 text-center text-slate-400">
+                  <tr className="crm-empty-row">
+                    <td colSpan={8} className="py-16 text-center text-slate-400">
                       <div className="flex flex-col items-center justify-center space-y-3">
                         <Users className="w-10 h-10 text-slate-300 stroke-[1.5]" />
                         <span className="text-sm font-semibold text-slate-600">No leads match your criteria</span>
@@ -1321,7 +1289,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                             setScoreFilter('ALL');
                             setSearchQuery('');
                           }}
-                          className="px-3 py-1.5 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg font-bold text-xs hover:bg-orange-100"
+                          className="px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-bold text-xs hover:bg-blue-100"
                         >
                           Clear All Filters
                         </button>
@@ -1333,11 +1301,12 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                     const contact = contactsMap.get(lead.contactId);
                     const isSelected = selectedLeadIds.has(lead.leadId);
                     const dt = formatLeadDateTime(lead.createdAt || lead.lastActivityAt);
-                    const currentStage =
-                      TELECRM_STAGES.find((s) => s.key === lead.status) || TELECRM_STAGES[1];
+                    const currentStage = TELECRM_STAGES.find((stage) => stage.key === lead.status) || TELECRM_STAGES[1];
                     const callerName = lead.assignedCaller || lead.ownerId || 'Unassigned';
-                    const callerObj = telecallers.find((c) => c.name === callerName);
-                    const followupDate = lead.aiAutoFollowUp?.status === 'scheduled' ? parseLeadDate(lead.aiAutoFollowUp.scheduledAt) : null;
+                    const callerObj = telecallers.find((caller) => caller.name === callerName);
+                    const followupDate = lead.aiAutoFollowUp?.status === 'scheduled'
+                      ? parseLeadDate(lead.aiAutoFollowUp.scheduledAt)
+                      : null;
                     const isFollowupOverdue = followupDate ? followupDate.getTime() < Date.now() : false;
                     const followupFormatted = followupDate
                       ? followupDate.toLocaleDateString('en-IN', {
@@ -1347,239 +1316,193 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                           minute: '2-digit',
                         })
                       : null;
+                    const leadName = [contact?.firstName, contact?.lastName].filter(Boolean).join(' ') || 'Unnamed Lead';
+                    const leadEmail = contact?.email || lead.serviceInterest || contact?.companyName || '—';
+                    const leadCity = lead.city || contact?.city || '';
 
                     return (
                       <tr
                         key={lead.leadId}
-                        className={`crm-lead-row hover:bg-slate-50/90 transition-colors group ${
-                          isSelected ? 'bg-orange-50/50' : ''
-                        }`}
+                        className={`crm-lead-row group transition-colors ${isSelected ? 'bg-blue-50/50' : ''}`}
                       >
-                        <td className="py-3 px-3 text-center">
+                        <td data-label="Select" className="crm-select-column text-center">
                           <button
                             onClick={() => toggleSelectRow(lead.leadId)}
-                            className="text-slate-400 hover:text-slate-700 transition-colors"
+                            className="text-slate-400 hover:text-blue-700 transition-colors"
+                            aria-label={`Select ${leadName}`}
                           >
-                            {isSelected ? (
-                              <CheckSquare className="w-4 h-4 text-orange-600" />
-                            ) : (
-                              <Square className="w-4 h-4" />
-                            )}
+                            {isSelected ? <CheckSquare className="w-4 h-4 text-blue-600" /> : <Square className="w-4 h-4" />}
                           </button>
                         </td>
 
-                        <td className="py-3 px-3 whitespace-nowrap">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-slate-800 text-[11px] font-mono">{dt.date}</span>
-                            <div className="flex items-center space-x-1.5 text-[10px] text-slate-400 font-medium">
-                              <span>{dt.time}</span>
-                              <span>•</span>
-                              <span className="text-orange-700 font-semibold bg-orange-50 px-1 py-0.2 rounded text-[9px]">
-                                {dt.relative}
+                        <td data-label="Lead / Contact" className="crm-lead-cell">
+                          <div className="crm-lead-identity">
+                            <div
+                              onClick={() => setActiveDrawerLeadId(lead.leadId)}
+                              className="crm-lead-avatar cursor-pointer"
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') setActiveDrawerLeadId(lead.leadId);
+                              }}
+                              title={`Open ${leadName}`}
+                            >
+                              {(contact?.firstName?.[0] || 'U') + (contact?.lastName?.[0] || '')}
+                            </div>
+                            <div className="crm-lead-identity-copy">
+                              <button
+                                type="button"
+                                onClick={() => setActiveDrawerLeadId(lead.leadId)}
+                                className="crm-lead-name"
+                                title={leadName}
+                              >
+                                {leadName}
+                              </button>
+                              <span className="crm-lead-email" title={leadEmail}>{leadEmail}</span>
+                              <span className="crm-lead-meta">
+                                {leadCity && <><MapPin className="w-2.5 h-2.5" /> {leadCity}<span className="crm-meta-separator">·</span></>}
+                                <span>{dt.date}</span>
+                                {dt.time && <><span className="crm-meta-separator">·</span><span>{dt.time}</span></>}
+                                {dt.relative && <span className="crm-relative-chip">{dt.relative}</span>}
                               </span>
                             </div>
                           </div>
                         </td>
 
-                        <td className="py-3 px-3">
-                          <div className="flex items-center space-x-2.5">
-                            <div
-                              onClick={() => setActiveDrawerLeadId(lead.leadId)}
-                              className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs shrink-0 cursor-pointer hover:ring-2 hover:ring-orange-500 transition-all shadow-2xs"
+                        <td data-label="Phone & Actions" className="crm-phone-cell">
+                          <span className={contact?.phone ? "crm-lead-phone" : "crm-lead-phone is-empty"}>
+                            {contact?.phone || "No phone added"}
+                          </span>
+                          <div className="crm-phone-actions">
+                            {contact?.phone ? (
+                              <>
+                                <button
+                                  onClick={() => handleStartCall(lead)}
+                                  className="crm-row-action crm-call-action"
+                                  title="Call lead"
+                                >
+                                  <PhoneCall className="w-3 h-3" /><span>Call</span>
+                                </button>
+                                <button
+                                  onClick={() => handleOpenWhatsApp(lead)}
+                                  className="crm-row-action crm-whatsapp-action"
+                                  title="Send WhatsApp message"
+                                >
+                                  <MessageCircle className="w-3 h-3" /><span>WhatsApp</span>
+                                </button>
+                              </>
+                            ) : <span className="crm-no-phone-hint">—</span>}
+                            <button
+                              onClick={() => onOpenConversation(undefined, lead.leadId)}
+                              className="crm-inbox-action"
+                              title="Open in Unified Inbox"
+                              aria-label="Open in Unified Inbox"
                             >
-                              {(contact?.firstName?.[0] || 'U') + (contact?.lastName?.[0] || '')}
-                            </div>
-                            <div className="min-w-0">
-                              <div
-                                onClick={() => setActiveDrawerLeadId(lead.leadId)}
-                                className="font-bold text-slate-900 hover:text-orange-700 cursor-pointer truncate max-w-[180px]"
-                                title={`${contact?.firstName} ${contact?.lastName}`}
-                              >
-                                {[contact?.firstName, contact?.lastName].filter(Boolean).join(' ') || 'Unnamed Lead'}
-                              </div>
-                              <div className="text-[11px] text-slate-500 truncate max-w-[180px]">
-                                {contact?.email || lead.serviceInterest || contact?.companyName || "—"}
-                              </div>
-                              {(lead.city || contact?.city) && (
-                                <div className="flex items-center space-x-1 text-[10px] text-slate-400 mt-0.5">
-                                  <MapPin className="w-2.5 h-2.5 text-slate-400" />
-                                  <span>{lead.city || contact?.city}</span>
-                                </div>
-                              )}
-                            </div>
+                              <Mail className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </td>
 
-                        <td className="py-3 px-3 whitespace-nowrap">
-                          <div className="flex flex-col space-y-1">
-                            <span className={contact?.phone ? "font-mono text-xs font-semibold text-slate-800" : "text-xs text-slate-400 font-normal"}>
-                              {contact?.phone || "—"}
-                            </span>
-                            <div className="flex items-center space-x-1.5">
-                              {contact?.phone ? (
-                                <>
-                                  <button
-                                    onClick={() => handleStartCall(lead)}
-                                    className="px-2 py-0.8 bg-orange-500 hover:bg-orange-600 text-white rounded-md text-[11px] font-bold flex items-center space-x-1 shadow-2xs transition-all hover:scale-105 active:scale-95"
-                                    title="Click to call"
-                                  >
-                                    <PhoneCall className="w-3 h-3" />
-                                    <span>Call</span>
-                                  </button>
-                                  <button
-                                    onClick={() => handleOpenWhatsApp(lead)}
-                                    className="px-2 py-0.8 bg-green-500 hover:bg-green-600 text-white rounded-md text-[11px] font-bold flex items-center space-x-1 shadow-2xs transition-all hover:scale-105 active:scale-95"
-                                    title="Send WhatsApp Message"
-                                  >
-                                    <MessageCircle className="w-3 h-3" />
-                                    <span>WhatsApp</span>
-                                  </button>
-                                </>
-                              ) : (
-                                <span className="text-[10px] text-slate-400 italic">No phone added</span>
-                              )}
-
-                              <button
-                                onClick={() => onOpenConversation(undefined, lead.leadId)}
-                                className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors"
-                                title="Open in Unified Inbox"
-                              >
-                                <Mail className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        </td>
-
-                        <td className="py-3 px-3 whitespace-nowrap">
-                          <div className="relative inline-block">
+                        <td data-label="Status" className="crm-status-cell">
+                          <div className="crm-status-control">
                             <select
                               value={lead.status}
-                              onChange={(e) => handleUpdateStatus(lead.leadId, e.target.value as LeadStatus)}
-                              className={`appearance-none font-bold text-xs px-2.5 py-1 pr-6 rounded-lg border cursor-pointer focus:outline-none transition-all ${currentStage.bg} ${currentStage.text} ${currentStage.border}`}
+                              onChange={(event) => handleUpdateStatus(lead.leadId, event.target.value as LeadStatus)}
+                              className={`crm-status-select ${currentStage.bg} ${currentStage.text} ${currentStage.border}`}
+                              title={currentStage.label}
+                              aria-label={`Status for ${leadName}`}
                             >
-                              {TELECRM_STAGES.filter((s) => s.key !== 'ALL').map((s) => (
-                                <option key={s.key} value={s.key} className="bg-white text-slate-800">
-                                  {s.label}
+                              {TELECRM_STAGES.filter((stage) => stage.key !== 'ALL').map((stage) => (
+                                <option key={stage.key} value={stage.key} className="bg-white text-slate-800">
+                                  {CRM_STAGE_LABELS[stage.key] || stage.label}
                                 </option>
                               ))}
                             </select>
-                            <ChevronDown className="w-3 h-3 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60" />
+                            <ChevronDown className="crm-select-chevron w-3 h-3" />
                           </div>
                         </td>
 
-                        <td className="py-3 px-3 whitespace-nowrap">
+                        <td data-label="Follow-up" className="crm-followup-cell">
                           {followupFormatted ? (
-                            <div className="flex flex-col space-y-0.5">
-                              <div
+                            <div className="crm-followup-content">
+                              <button
+                                type="button"
                                 onClick={() => setCustomFollowUpLead(lead)}
-                                className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[11px] font-bold border cursor-pointer ${
-                                  isFollowupOverdue
-                                    ? 'bg-rose-50 text-rose-700 border-rose-300 animate-pulse'
-                                    : 'bg-amber-50 text-amber-800 border-amber-300'
-                                }`}
-                                title="Click to reschedule callback"
+                                className={`crm-followup-date ${isFollowupOverdue ? 'is-overdue' : ''}`}
+                                title="Reschedule callback"
                               >
                                 <CalendarClock className="w-3 h-3" />
                                 <span>{followupFormatted}</span>
-                              </div>
-                              {isFollowupOverdue && (
-                                <span className="text-[10px] text-rose-600 font-bold">Callback Overdue!</span>
-                              )}
+                              </button>
+                              {isFollowupOverdue && <span className="crm-followup-overdue">Callback overdue</span>}
                             </div>
                           ) : (
-                            <div className="flex items-center space-x-1">
+                            <div className="crm-followup-quick-actions">
                               <button
                                 onClick={() => setQuickFollowUpPreset(lead.leadId, 2)}
-                                className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-semibold rounded border border-slate-200"
                                 title="Schedule an AI message in 2 hours"
-                              >
-                                +2h
-                              </button>
+                              >+2h</button>
                               <button
                                 onClick={() => setQuickFollowUpPreset(lead.leadId, 24)}
-                                className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-semibold rounded border border-slate-200"
                                 title="Schedule an AI message in 1 day"
-                              >
-                                +1d
-                              </button>
+                              >+1d</button>
                               <button
                                 onClick={() => setCustomFollowUpLead(lead)}
-                                className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold rounded border border-amber-200 flex items-center space-x-1"
-                              >
-                                <Plus className="w-2.5 h-2.5" />
-                                <span>Set Time</span>
-                              </button>
+                                title="Set a custom follow-up time"
+                              ><Plus className="w-3 h-3" /><span>Set Time</span></button>
                             </div>
                           )}
                         </td>
 
-                        <td className="py-3 px-3 whitespace-nowrap">
-                          <div className="flex items-center space-x-1.5">
-                            <div
-                              className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 ${
-                                callerObj?.avatarColor || 'bg-slate-400'
-                              }`}
-                            >
+                        <td data-label="Assigned To" className="crm-assignee-cell">
+                          <div className="crm-assignee-control" title={callerName}>
+                            <span className={`crm-assignee-avatar ${callerObj?.avatarColor || 'bg-slate-400'}`}>
                               {callerName[0] || 'U'}
-                            </div>
+                            </span>
                             <select
                               value={callerName}
-                              onChange={(e) => handleAssignCaller(lead.leadId, e.target.value)}
-                              className="text-xs font-semibold text-slate-700 bg-transparent border-0 hover:bg-slate-100 rounded px-1 py-0.5 focus:outline-none cursor-pointer"
+                              onChange={(event) => handleAssignCaller(lead.leadId, event.target.value)}
+                              className="crm-assignee-select"
+                              aria-label={`Assigned to for ${leadName}`}
                             >
                               <option value="Unassigned">Unassigned</option>
-                              {telecallers.map((c) => (
-                                <option key={c.id} value={c.name}>
-                                  {c.name}
-                                </option>
+                              {telecallers.map((caller) => (
+                                <option key={caller.id} value={caller.name}>{caller.name}</option>
                               ))}
                             </select>
                           </div>
                         </td>
 
-                        <td className="py-3 px-3 whitespace-nowrap">
-                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md text-[10px] font-bold border border-slate-200">
-                            {lead.source === 'WHATSAPP' && <MessageCircle className="w-2.5 h-2.5 text-green-600" />}
-                            {lead.source === 'WEBSITE' && <Globe className="w-2.5 h-2.5 text-blue-600" />}
-                            {lead.source === 'INSTAGRAM' && <Share2 className="w-2.5 h-2.5 text-pink-600" />}
-                            {lead.source === 'EMAIL' && <Mail className="w-2.5 h-2.5 text-slate-600" />}
-                            {lead.source === 'OUTBOUND' && <Send className="w-2.5 h-2.5 text-purple-600" />}
-                            <span>{lead.source}</span>
+                        <td data-label="Source / Score" className="crm-source-score-cell">
+                          <span className={`crm-source-pill crm-source-${String(lead.source || 'manual').toLowerCase()}`}>
+                            {lead.source === 'WHATSAPP' && <MessageCircle className="w-3 h-3" />}
+                            {lead.source === 'WEBSITE' && <Globe className="w-3 h-3" />}
+                            {lead.source === 'INSTAGRAM' && <Share2 className="w-3 h-3" />}
+                            {lead.source === 'EMAIL' && <Mail className="w-3 h-3" />}
+                            {lead.source === 'OUTBOUND' && <Send className="w-3 h-3" />}
+                            {lead.source !== 'WHATSAPP' && lead.source !== 'WEBSITE' && lead.source !== 'INSTAGRAM' && lead.source !== 'EMAIL' && lead.source !== 'OUTBOUND' && <Target className="w-3 h-3" />}
+                            <span>{lead.source || 'MANUAL'}</span>
+                          </span>
+                          <span className={`crm-score-pill ${(lead.leadScore || 0) >= 80 ? 'is-hot' : (lead.leadScore || 0) >= 50 ? 'is-warm' : 'is-cold'}`}>
+                            <Flame className="w-3 h-3" /> AI {lead.leadScore || 50}
                           </span>
                         </td>
 
-                        <td className="py-3 px-3 whitespace-nowrap">
-                          <div className="flex items-center space-x-1">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold font-mono tabular-nums ${
-                                (lead.leadScore || 0) >= 80
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : (lead.leadScore || 0) >= 50
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-slate-100 text-slate-600'
-                              }`}
-                            >
-                              {lead.leadScore || 50}
-                            </span>
-                            {(lead.leadScore || 0) >= 80 && <Flame className="w-3.5 h-3.5 text-orange-500" />}
-                          </div>
-                        </td>
-
-                        <td className="py-3 px-3">
-                          <div
-                            onClick={() => setQuickNoteLead(lead)}
-                            className="cursor-pointer group-hover:text-slate-900 text-slate-500 truncate max-w-[200px] text-[11px] hover:underline"
-                            title={lead.notes || lead.queryMessage || 'Click to add note'}
-                          >
-                            {lead.notes || lead.queryMessage || '+ Add call note...'}
-                          </div>
-                        </td>
-
-                        <td className="py-3 px-3 text-right whitespace-nowrap">
+                        <td data-label="Note / Profile" className="crm-note-cell">
                           <button
+                            type="button"
+                            onClick={() => setQuickNoteLead(lead)}
+                            className="crm-note-text"
+                            title={lead.notes || lead.queryMessage || 'Click to add a call note'}
+                          >
+                            {lead.notes || lead.queryMessage || '+ Add call note'}
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setActiveDrawerLeadId(lead.leadId)}
-                            className="p-1.5 text-slate-400 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-colors"
+                            className="crm-profile-action"
                             title="View Lead 360° Profile"
+                            aria-label="View Lead 360° Profile"
                           >
                             <Eye className="w-4 h-4" />
                           </button>

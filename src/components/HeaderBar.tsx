@@ -23,7 +23,6 @@ import {
   ChevronRight,
   Grid2X2,
   X,
-  Check,
 } from 'lucide-react';
 import { useBrand } from '../context/BrandContext';
 import { ActiveTab } from './Navbar';
@@ -229,11 +228,11 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   const billingStatus = entitlements?.billing?.status || '';
   const rawPlanName = entitlements?.planName || currentTenant?.planName || currentTenant?.plan || '';
   const formattedPlanName = rawPlanName
-    ? rawPlanName.replace(/[_-]+/g, ' ').replace(/\\b\\w/g, (letter) => letter.toUpperCase())
+    ? rawPlanName.replace(/[_-]+/g, ' ').replace(/^./, (letter) => letter.toUpperCase())
     : 'Workspace plan';
   const planLabel = billingStatus === 'trialing'
     ? 'Trial Plan'
-    : /\\bplan\\b/i.test(formattedPlanName) ? formattedPlanName : `${formattedPlanName} Plan`;
+    : formattedPlanName.toLowerCase().includes('plan') ? formattedPlanName : `${formattedPlanName} Plan`;
   const contactLimitRaw =
     entitlements?.limits?.contacts ??
     currentTenant?.limits?.contacts ??

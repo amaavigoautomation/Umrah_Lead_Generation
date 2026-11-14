@@ -110,7 +110,7 @@ export async function searchTenantWorkspace(
     { category: 'Conversations', module: 'inbox', recordType: 'message', ref: repo.messages(), title: ['subject', 'contactName', 'fromName'], subtitle: ['channel', 'from', 'to', 'email'], content: ['subject', 'text', 'body', 'html', 'content', 'message', 'from', 'to', 'email', 'contactName'], date: ['createdAt', 'timestamp', 'sentAt'] },
     { category: 'Campaigns', module: 'campaigns', recordType: 'campaign', ref: repo.outboundCampaigns(), title: ['name', 'campaignName', 'title'], subtitle: ['status', 'channel', 'type'], content: ['name', 'campaignName', 'title', 'description', 'status', 'subject', 'previewText'], date: ['updatedAt', 'createdAt'] },
     { category: 'Campaigns', module: 'campaigns', recordType: 'campaign', ref: repo.campaigns(), title: ['name', 'campaignName', 'title'], subtitle: ['status', 'channel', 'type'], content: ['name', 'campaignName', 'title', 'description', 'status', 'subject'], date: ['updatedAt', 'createdAt'] },
-    { category: 'Email & WhatsApp Templates', module: 'email-design-studio', recordType: 'template', ref: repo.emailTemplates(), title: ['name', 'title', 'templateName'], subtitle: ['type', 'channel', 'status'], content: ['name', 'title', 'templateName', 'subject', 'description', 'html', 'body', 'content'], date: ['updatedAt', 'createdAt'] },
+    { category: 'Email & WhatsApp Templates', module: 'email-design-studio', recordType: 'template', ref: repo.emailTemplates(), title: ['name', 'title', 'templateName'], subtitle: ['purpose', 'type', 'channel', 'status'], content: ['name', 'title', 'templateName', 'subject', 'description', 'html', 'body', 'content'], date: ['updatedAt', 'createdAt'] },
     { category: 'Knowledge Base', module: 'knowledge', recordType: 'knowledge-document', ref: repo.knowledgeDocuments(), title: ['title', 'name'], subtitle: ['category', 'source', 'status'], content: ['title', 'name', 'content', 'text', 'summary', 'description', 'url'], date: ['updatedAt', 'createdAt'] },
     { category: 'Lead Database', module: 'database', recordType: 'database-entry', ref: repo.leadDatabaseEntries(), title: ['name', 'companyName'], subtitle: ['email', 'phone', 'sourceDatabaseName'], content: ['name', 'email', 'phone', 'companyName', 'website', 'designation', 'city', 'country'], date: ['updatedAt', 'createdAt'] },
     { category: 'Activities & Follow-ups', module: 'crm', recordType: 'activity', ref: repo.leadActivities(), title: ['title', 'subject', 'leadName', 'contactName'], subtitle: ['type', 'status', 'assignedToName'], content: ['title', 'subject', 'leadName', 'contactName', 'description', 'notes', 'type', 'status'], date: ['updatedAt', 'createdAt', 'dueAt'] },
@@ -121,7 +121,7 @@ export async function searchTenantWorkspace(
   const results: GlobalSearchResult[] = [];
   const batches = await Promise.all(visibleSpecs.map(async (spec) => {
     try {
-      const scanned = await readCollection(spec.ref, ctx.tenantId + ':' + spec.category + ':' + visibleSpecs.indexOf(spec));
+      const scanned = await readCollection(spec.ref, ctx.tenantId + ':' + String(spec.ref.path || spec.category + ':' + spec.recordType));
       return { spec, rows: scanned.rows, truncated: scanned.truncated, failed: false };
     } catch {
       return { spec, rows: [], truncated: false, failed: true };

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Activity, ArrowUpRight, Bot, Check, Database, File, FileDown, FileText, History, Image, Loader2, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Send, Settings2, ShieldCheck, Sparkles, Square, X } from 'lucide-react';
+import { Activity, ArrowUpRight, Bot, Check, Database, File, FileDown, FileText, History, Image, Loader2, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, Send, Settings2, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { useAgent, AgentAutonomy, AgentMessage, AgentArtifact, AgentAttachmentInput } from '../context/AgentContext';
 import type { AppUser } from '../types';
 import { buildCampaignReportPdfDocument } from './CampaignReports';
@@ -277,7 +277,7 @@ function Messages({ messages, sending, compact, onOpenTemplate, onAction, activi
 }
 
 function ChatComposer({ moduleContext, compact }: { moduleContext: string; compact?: boolean }) {
-  const { sendMessage, sending, stopping, cancelMessage } = useAgent();
+  const { sendMessage, sending } = useAgent();
   const [value, setValue] = useState('');
   const [attachments, setAttachments] = useState<AgentAttachmentInput[]>([]);
   const [attachmentError, setAttachmentError] = useState('');
@@ -352,13 +352,7 @@ function ChatComposer({ moduleContext, compact }: { moduleContext: string; compa
       <input ref={fileInputRef} type="file" multiple className="hidden" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.csv,.tsv,.xls,.xlsx,.txt,.md,.json" onChange={(event) => void addFiles(event.target.files)} />
       <button type="button" disabled={sending || attachments.length >= MAX_FILES} onClick={() => fileInputRef.current?.click()} className="agent-home-attach mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 disabled:opacity-40" title="Attach files" aria-label="Attach files"><Paperclip className="h-4 w-4" /></button>
       <textarea value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }} rows={compact ? 2 : 2} placeholder="Message your AI Agent…" className="agent-home-composer-input max-h-32 min-h-[48px] flex-1 resize-y bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-600" />
-      {sending ? (
-        <button type="button" onClick={() => void cancelMessage()} disabled={stopping} className="agent-home-send agent-home-stop mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition hover:brightness-110 disabled:cursor-wait disabled:opacity-70" title={stopping ? 'Stopping generation…' : 'Stop generating'} aria-label={stopping ? 'Stopping generation' : 'Stop generating'}>
-          {stopping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="h-3.5 w-3.5 fill-current" />}
-        </button>
-      ) : (
-        <button type="button" disabled={(!value.trim() && !attachments.length)} onClick={submit} className="agent-home-send mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35" title="Send message" aria-label="Send message"><Send className="h-4 w-4" /></button>
-      )}
+      <button type="button" disabled={(!value.trim() && !attachments.length) || sending} onClick={submit} className="agent-home-send mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35" title="Send message" aria-label="Send message"><Send className="h-4 w-4" /></button>
     </div>
     <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-slate-500"><span>Enter to send · Shift + Enter for a new line</span><span className="text-right">Images · PDFs · Spreadsheets · Text · JSON</span></div>
   </div>;

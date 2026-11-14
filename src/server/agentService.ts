@@ -39,25 +39,6 @@ const REASONING_EFFORT = process.env.AGENT_REASONING_EFFORT || 'medium';
 const MAX_USER_MESSAGE = 8000;
 const MAX_CONTEXT_MESSAGES = 16;
 
-// Process-local abort is best-effort on serverless runtimes; the Firestore status
-// remains the authoritative cancellation signal across isolated function instances.
-const activeAgentAbortControllers = new Map<string, AbortController>();
-const AGENT_CANCELLED = 'AGENT_CANCELLED';
-
-async function assertAgentExecutionActive(
-  ctx: TenantContext,
-  executionId: string,
-  signal?: AbortSignal,
-): Promise<void> {
-  if (signal?.aborted) throw Object.assign(new Error('Generation stopped.'), { code: AGENT_CANCELLED });
-  const snapshot = await getDoc(tenantRepo(ctx).doc('agent_executions', executionId));
-  const state = snapshot.exists() ? snapshot.data() as any : null;
-  if (!state || state.actorUid !== ctx.uid) throw new Error('Execution not found.');
-  if (state.status === 'cancel_requested' || state.status === 'cancelled') {
-    throw Object.assign(new Error('Generation stopped.'), { code: AGENT_CANCELLED });
-  }
-}
-
 const TOOL_DEFINITIONS: any[] = [
   { type: 'web_search' },
   { type: 'function', name: 'get_company_profile', description: 'Read this tenant company profile, website URL, verified logo URL, company name, tagline and contact details.', parameters: { type: 'object', properties: {}, additionalProperties: false }, strict: false },
@@ -565,14 +546,7 @@ async function runAgent(
   appBaseUrl: string,
   attachments: AgentAttachment[],
   onProgress?: (label: string) => Promise<void>,
-  abortSignal?: AbortSignal,
-  assertActive?: () => Promise<void>,
 ) {
-  const assertNotCancelled = async () => {
-    if (abortSignal?.aborted) throw Object.assign(new Error('Generation stopped.'), { code: AGENT_CANCELLED });
-    await assertActive?.();
-  };
-  await assertNotCancelled();
   await onProgress?.('Understanding your request and checking workspace context…');
   const asksForTemplate = /\b(create|make|build|design|generate)\b.{0,120}\b(template|design)\b/i.test(message)
     || /\b(template|design)\b.{0,120}\b(create|make|build|generate)\b/i.test(message);
@@ -642,7 +616,6 @@ async function runAgent(
   let finalText = '';
 
   for (let turn = 0; turn < 10; turn++) {
-    await assertNotCancelled();
     const response: any = await client.responses.create({
       model: MODEL,
       input,
@@ -652,9 +625,8 @@ async function runAgent(
       reasoning: { effort: REASONING_EFFORT },
       max_output_tokens: 10000,
       store: false,
-    } as any, abortSignal ? { signal: abortSignal } : undefined);
+    } as any);
     await recordAiCompletionUsage(ctx.tenantId, response, MODEL, 'openai', 'ai_agent');
-    await assertNotCancelled();
     const outputItems: any[] = Array.isArray(response.output) ? response.output : [];
     if (!outputItems.length) break;
     input.push(...outputItems);
@@ -668,7 +640,6 @@ async function runAgent(
       break;
     }
     for (const call of functionCalls) {
-      await assertNotCancelled();
       const toolName = String(call.name || '');
       const progressLabels: Record<string, string> = {
         research_company_brand: 'Researching your official company branding…',
@@ -709,7 +680,6 @@ async function runAgent(
           metadata: { tool: toolName, outcome: 'failed' },
         });
       }
-      await assertNotCancelled();
       input.push({ type: 'function_call_output', call_id: call.call_id, output: safeJson(output) });
     }
     if (turn === 9) finalText = 'I completed the available workspace actions, but reached the tool-call limit for this turn. Please ask me to continue.';
@@ -776,67 +746,6 @@ export async function handleAgentApi(req: any, res: any, ctx: TenantContext, bod
       return send(200, { success: true, conversation: { id, title: (data as any).title, moduleContext: (data as any).moduleContext }, messages });
     }
 
-    if (url === '/api/agent/notifications' && req.method === 'GET') {
-      const snapshot = await getDocs(query(repo.collection('agent_executions'), where('actorUid', '==', ctx.uid), orderBy('createdAt', 'desc'), limit(100)));
-      const notifications = snapshot.docs
-        .map((doc: any) => ({ id: doc.id, ...(doc.data() as any) }))
-        .filter((item: any) => ['completed', 'failed'].includes(String(item.status)) && !item.notificationReadAt)
-        .sort((a: any, b: any) => String(b.completedAt || b.failedAt || b.updatedAt || b.createdAt || '').localeCompare(String(a.completedAt || a.failedAt || a.updatedAt || a.createdAt || '')))
-        .slice(0, 30)
-        .map((item: any) => ({
-          id: item.id,
-          conversationId: String(item.conversationId || ''),
-          title: cleanText(item.notificationTitle || (item.status === 'failed' ? 'AI Agent task failed' : 'AI Agent task completed'), 100),
-          message: cleanText(item.notificationMessage || item.progress || '', 180),
-          status: item.status === 'failed' ? 'failed' : 'completed',
-          completedAt: String(item.completedAt || item.failedAt || item.updatedAt || item.createdAt || ''),
-        }));
-      return send(200, { success: true, notifications, unreadCount: notifications.length });
-    }
-
-    if (url === '/api/agent/notifications/read' && req.method === 'POST') {
-      const executionIds: string[] = Array.isArray(body?.executionIds)
-        ? [...new Set((body.executionIds as unknown[])
-            .map((value) => String(value ?? '').trim())
-            .filter((value): value is string => /^[a-zA-Z0-9_-]{12,100}$/.test(value)))]
-            .slice(0, 30)
-        : [];
-      if (!executionIds.length) return send(400, { success: false, error: 'At least one valid execution ID is required.' });
-      const readAt = new Date().toISOString();
-      let updated = 0;
-      for (const executionId of executionIds) {
-        const executionRef = repo.doc('agent_executions', executionId);
-        const snapshot = await getDoc(executionRef);
-        if (!snapshot.exists()) continue;
-        const data = snapshot.data() as any;
-        if (data.actorUid !== ctx.uid || !['completed', 'failed'].includes(String(data.status))) continue;
-        await setDoc(executionRef, { notificationReadAt: readAt }, { merge: true });
-        updated += 1;
-      }
-      return send(200, { success: true, updated, readAt });
-    }
-
-    const cancelExecutionMatch = url.match(/^\/api\/agent\/executions\/([a-zA-Z0-9_-]{12,100})\/cancel$/);
-    if (cancelExecutionMatch && req.method === 'POST') {
-      const executionId = cancelExecutionMatch[1];
-      const executionRef = repo.doc('agent_executions', executionId);
-      const snap = await getDoc(executionRef);
-      if (!snap.exists()) return send(404, { success: false, error: 'Execution not found.' });
-      const data = snap.data() as any;
-      if (data?.actorUid !== ctx.uid) return send(404, { success: false, error: 'Execution not found.' });
-      if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
-        return send(200, { success: true, status: data.status });
-      }
-      await setDoc(executionRef, {
-        status: 'cancel_requested',
-        progress: 'Stopping generation…',
-        cancelRequestedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }, { merge: true });
-      activeAgentAbortControllers.get(executionId)?.abort();
-      return send(200, { success: true, status: 'cancel_requested' });
-    }
-
     const executionMatch = url.match(/^\/api\/agent\/executions\/([a-zA-Z0-9_-]{12,100})$/);
     if (executionMatch && req.method === 'GET') {
       const executionId = executionMatch[1];
@@ -890,12 +799,8 @@ export async function handleAgentApi(req: any, res: any, ctx: TenantContext, bod
       const history = await readConversationMessages(ctx, conversationId, MAX_CONTEXT_MESSAGES);
       const config = await readConfig(ctx);
       await setDoc(executionRef, { status: 'processing', progress: 'Starting your Agent task…', updatedAt: new Date().toISOString() }, { merge: true });
-      const abortController = new AbortController();
-      activeAgentAbortControllers.set(executionId, abortController);
-      const assertActive = () => assertAgentExecutionActive(ctx, executionId, abortController.signal);
       const task = (async () => {
         try {
-          await assertActive();
           const result = await runAgent(
             message,
             history.filter((m) => m.id !== 'user-' + executionId),
@@ -907,29 +812,14 @@ export async function handleAgentApi(req: any, res: any, ctx: TenantContext, bod
             executionId,
             safePublicBaseUrl(req),
             attachments,
-            async (progress) => {
-              await assertActive();
-              // Do not overwrite cancel_requested when reporting progress.
-              await setDoc(executionRef, { progress, updatedAt: new Date().toISOString() }, { merge: true });
-            },
-            abortController.signal,
-            assertActive,
+            async (progress) => setDoc(executionRef, { status: 'processing', progress, updatedAt: new Date().toISOString() }, { merge: true }),
           );
-          await assertActive();
           const assistantId = 'assistant-' + executionId;
           const assistantMessage = { id: assistantId, role: 'assistant', content: result.content, createdAt: new Date().toISOString(), toolsUsed: result.toolsUsed, artifacts: result.artifacts };
           await setDoc(repo.doc('agent_conversations/' + conversationId + '/messages', assistantId), assistantMessage);
           const title = conversation.title === 'New conversation' ? message.slice(0, 64) : conversation.title;
           await setDoc(conversationRef, { title, updatedAt: assistantMessage.createdAt, moduleContext: moduleContext || conversation.moduleContext }, { merge: true });
-          await setDoc(executionRef, {
-            status: 'completed',
-            progress: 'Completed',
-            assistantMessage,
-            toolsUsed: result.toolsUsed,
-            completedAt: assistantMessage.createdAt,
-            notificationTitle: title || 'AI Agent task completed',
-            notificationMessage: String(result.content || 'Your AI Agent task is complete.').replace(/\s+/g, ' ').slice(0, 180),
-          }, { merge: true });
+          await setDoc(executionRef, { status: 'completed', progress: 'Completed', assistantMessage, toolsUsed: result.toolsUsed, completedAt: assistantMessage.createdAt }, { merge: true });
           await writeTenantAuditEvent(ctx, {
             action: 'AGENT_MESSAGE_COMPLETED',
             module: 'AI_ENGINE',
@@ -940,38 +830,17 @@ export async function handleAgentApi(req: any, res: any, ctx: TenantContext, bod
         } catch (error: any) {
           const currentExecution = await getDoc(executionRef);
           const currentState = currentExecution.exists() ? currentExecution.data() as any : null;
-          const cancelled = error?.code === AGENT_CANCELLED || currentState?.status === 'cancel_requested' || currentState?.status === 'cancelled';
-          if (cancelled) {
-            await setDoc(executionRef, {
-              status: 'cancelled',
-              progress: 'Stopped',
-              cancelledAt: new Date().toISOString(),
-            }, { merge: true });
-            const title = conversation.title === 'New conversation' ? message.slice(0, 64) : conversation.title;
-            await setDoc(conversationRef, { title, updatedAt: new Date().toISOString(), moduleContext: moduleContext || conversation.moduleContext }, { merge: true });
-          } else {
-            if (currentState?.status !== 'completed') {
-              const failureMessage = cleanText(error?.message || 'Agent execution failed.', 300);
-              await setDoc(executionRef, {
-                status: 'failed',
-                progress: 'Failed',
-                error: failureMessage,
-                failedAt: new Date().toISOString(),
-                notificationTitle: 'AI Agent task failed',
-                notificationMessage: failureMessage.slice(0, 180),
-              }, { merge: true });
-            }
-            await writeTenantAuditEvent(ctx, {
-              action: 'AGENT_EXECUTION_FAILED',
-              module: 'AI_ENGINE',
-              severity: 'WARNING',
-              description: 'AI Agent background execution failed.',
-              target: { type: 'Agent Conversation', id: conversationId },
-              metadata: { executionId, error: cleanText(error?.message || 'Execution failed.', 300) },
-            }).catch(() => {});
+          if (currentState?.status !== 'completed') {
+            await setDoc(executionRef, { status: 'failed', progress: 'Failed', error: cleanText(error?.message || 'Agent execution failed.', 300), failedAt: new Date().toISOString() }, { merge: true });
           }
-        } finally {
-          activeAgentAbortControllers.delete(executionId);
+          await writeTenantAuditEvent(ctx, {
+            action: 'AGENT_EXECUTION_FAILED',
+            module: 'AI_ENGINE',
+            severity: 'WARNING',
+            description: 'AI Agent background execution failed.',
+            target: { type: 'Agent Conversation', id: conversationId },
+            metadata: { executionId, error: cleanText(error?.message || 'Execution failed.', 300) },
+          }).catch(() => {});
         }
       })();
       try { waitUntil(task); } catch { void task; }

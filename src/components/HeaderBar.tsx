@@ -187,7 +187,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   }, [tenantId]);
 
   useEffect(() => {
-    if (!activePopover) return;
+    if (!activePopover && !showFeedbackModal) return;
     const handlePointer = (event: MouseEvent) => {
       if (actionsRef.current && !actionsRef.current.contains(event.target as Node)) {
         setActivePopover(null);
@@ -196,6 +196,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
     };
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        if (showFeedbackModal && !feedbackSubmitting) setShowFeedbackModal(false);
         setActivePopover(null);
         setAppsExpanded(false);
       }
@@ -206,7 +207,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
       document.removeEventListener('mousedown', handlePointer);
       document.removeEventListener('keydown', handleKey);
     };
-  }, [activePopover]);
+  }, [activePopover, showFeedbackModal, feedbackSubmitting]);
 
   useEffect(() => {
     if (activePopover === 'search') globalSearchRef.current?.focus();

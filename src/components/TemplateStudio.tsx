@@ -36,6 +36,25 @@ export const TemplateStudio: React.FC<Props> = ({
     setVisitedSections((current) => new Set([...current, initialView]));
   }, [initialView, initialTemplateId]);
 
+  useEffect(() => {
+    const onGlobalSearchResult = (event: Event) => {
+      const detail = (event as CustomEvent<any>).detail;
+      if (!detail || detail.module !== 'email-design-studio') return;
+      if (detail.recordType === 'whatsapp-template') {
+        setPendingTemplateId(undefined);
+        setSection('whatsapp');
+        setVisitedSections((current) => new Set([...current, 'whatsapp']));
+        return;
+      }
+      const purpose = String(detail.subtitle || '').toLowerCase().includes('campaign') ? 'campaign' : 'conversation';
+      setPendingTemplateId(String(detail.recordId || ''));
+      setSection(purpose);
+      setVisitedSections((current) => new Set([...current, purpose]));
+    };
+    window.addEventListener('umrah360:global-search-result', onGlobalSearchResult);
+    return () => window.removeEventListener('umrah360:global-search-result', onGlobalSearchResult);
+  }, []);
+
   const changeSection = (next: TemplateStudioSection) => {
     if (section === 'campaign' && next !== 'campaign') setPendingTemplateId(undefined);
     setVisitedSections((current) => new Set([...current, next]));

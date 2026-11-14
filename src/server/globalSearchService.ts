@@ -22,6 +22,7 @@ const collectionCache = new Map<string, { at: number; rows: Array<{ id: string; 
 const MAX_RESULTS_PER_CATEGORY = 5;
 const CACHE_TTL_MS = 15_000;
 const cache = new Map<string, { at: number; results: GlobalSearchResult[]; truncated: boolean }>();
+const whatsAppTemplatesCache = new Map<string, { at: number; templates: any[] }>();
 
 function text(value: unknown, max = 1200): string {
   if (typeof value === 'string' || typeof value === 'number') return String(value).replace(/\s+/g, ' ').trim().slice(0, max);
@@ -182,6 +183,36 @@ export async function searchTenantWorkspace(
       }
     } catch {
       // A missing optional user collection must not break the rest of global search.
+    }
+  }
+
+  // WhatsApp templates are sourced live from Meta, not Firestore. Cache the tenant's list briefly.
+  if (isAdmin) {
+    try {
+      let templates = whatsAppTemplatesCache.get(ctx.tenantId);
+      if (!templates || Date.now() - templates.at >= COLLECTION_CACHE_TTL_MS) {
+        const meta = await import('./metaChannelsService.js');
+        const liveTemplates = await meta.listWhatsAppTemplatesForManagement(ctx);
+        templates = { at: Date.now(), templates: liveTemplates };
+        whatsAppTemplatesCache.set(ctx.tenantId, templates);
+      }
+      for (const template of templates.templates) {
+        const componentsText = JSON.stringify(template.components || []);
+        const blob = [template.name, template.language, template.category, template.status, componentsText].map((value) => text(value, 1200)).join(' ').toLowerCase();
+        if (!blob.includes(term)) continue;
+        results.push({
+          id: 'whatsapp-template:' + String(template.id || template.name),
+          category: 'Email & WhatsApp Templates',
+          title: text(template.name, 160) || 'WhatsApp template',
+          subtitle: ['WhatsApp', template.language, template.status].filter(Boolean).join(' · '),
+          snippet: makeSnippet({ body: componentsText }, ['body'], term),
+          module: 'email-design-studio',
+          recordId: String(template.id || template.name),
+          recordType: 'whatsapp-template',
+        });
+      }
+    } catch {
+      // WhatsApp may not be connected; email template results remain available.
     }
   }
 

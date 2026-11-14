@@ -176,6 +176,6 @@ export async function searchTenantWorkspace(
   const sorted = results.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
   const capped = sorted.slice(0, 35);
   const result = { query: term, results: capped, total: capped.length, truncated: false };
-  cache.set(cacheKey, { at: Date.now(), results: capped, truncated });
+  cache.set(cacheKey, { at: Date.now(), results: capped, truncated: false });
   return result;
 }

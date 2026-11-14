@@ -262,7 +262,8 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
     setActivePopover(null);
     setGlobalQuery('');
     setGlobalCategory('All');
-    window.dispatchEvent(new CustomEvent('umrah360:global-search-result', { detail: item }));
+    const searchDetail = { ...item, query: globalQuery.trim() };
+    window.setTimeout(() => window.dispatchEvent(new CustomEvent('umrah360:global-search-result', { detail: searchDetail })), 120);
   };
 
   const availableApps = useMemo(() => {

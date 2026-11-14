@@ -490,7 +490,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
   }, [session, currentTenantId]);
 
   // What the workspace's plan includes (the server enforces it too; this only drives the UI).
-  const [entitlements, setEntitlements] = useState<{ planName: string; features: Record<string, boolean>; billing?: { status: string; locked: boolean; graceEndsAt?: string } } | null>(null);
+  const [entitlements, setEntitlements] = useState<{ planName: string; features: Record<string, boolean>; limits?: Record<string, number>; billing?: { status: string; locked: boolean; graceEndsAt?: string } } | null>(null);
   const [activatingPlan, setActivatingPlan] = useState(false);
   const [entitlementsLoaded, setEntitlementsLoaded] = useState(false);
   useEffect(() => {
@@ -500,7 +500,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       fetch('/api/entitlements')
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
-          if (!cancelled && d?.features) setEntitlements({ planName: d.planName, features: d.features, billing: d.billing });
+          if (!cancelled && d?.features) setEntitlements({ planName: d.planName, features: d.features, limits: d.limits || {}, billing: d.billing });
         })
         .catch(() => {})
         .finally(() => setEntitlementsLoaded(true));
@@ -512,7 +512,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       fetch('/api/billing/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: checkoutSession }) })
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
-          if (d?.entitlements?.features) setEntitlements({ planName: d.entitlements.planName, features: d.entitlements.features, billing: d.entitlements.billing });
+          if (d?.entitlements?.features) setEntitlements({ planName: d.entitlements.planName, features: d.entitlements.features, limits: d.entitlements.limits || {}, billing: d.entitlements.billing });
         })
         .catch(() => {})
         .finally(() => {
@@ -2676,21 +2676,22 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
       />
 
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-{activeTab !== 'agent' && (
-          <HeaderBar
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            unreadCount={unreadCount}
-            handoffCount={handoffCount}
-            tenantId={currentTenantId}
-            currentUser={currentUser}
-            onLogout={handleLogout}
-            currentTenant={currentTenant}
-            allTenants={allTenants}
-            onSwitchTenant={(tenantId) => setCurrentTenantId(tenantId)}
-            hideModuleNavigation={activeTab === 'inbox' || activeTab === 'dashboard'}
-          />
-        )}
+<HeaderBar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          unreadCount={unreadCount}
+          handoffCount={handoffCount}
+          tenantId={currentTenantId}
+          currentUser={currentUser}
+          onLogout={handleLogout}
+          currentTenant={currentTenant}
+          allTenants={allTenants}
+          onSwitchTenant={(tenantId) => setCurrentTenantId(tenantId)}
+          contactCount={contacts.length}
+          entitlements={entitlements}
+          planLocked={planLocked}
+          hideModuleNavigation={activeTab === 'inbox' || activeTab === 'dashboard' || activeTab === 'agent'}
+        />
 
         <main className={`flex-1 min-w-0 min-h-0 ${activeTab === 'dashboard' ? 'p-0 overflow-y-auto' : activeTab === 'inbox' ? 'p-0 overflow-hidden flex flex-col' : activeTab === 'agent' ? 'p-0 overflow-hidden flex flex-col' : 'p-3 sm:p-5 overflow-y-auto'}`}>
         {entitlements?.billing?.status === 'past_due' && (

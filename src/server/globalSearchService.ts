@@ -1,4 +1,4 @@
-import { limit, orderByDocumentId, query, getDocs, where } from './adminFirestore.js';
+import { limit, orderByDocumentId, startAfterId, query, getDocs, where } from './adminFirestore.js';
 import { tenantRepo, globalUsersCol } from './tenantRepo.js';
 import type { TenantContext } from '../types/tenant.js';
 
@@ -15,7 +15,8 @@ export interface GlobalSearchResult {
   updatedAt?: string;
 }
 
-const MAX_DOCS_PER_COLLECTION = 1000;
+const COLLECTION_CACHE_TTL_MS = 30_000;
+const collectionCache = new Map<string, { at: number; rows: Array<{ id: string; data: Record<string, any> }> }>();
 const MAX_RESULTS_PER_CATEGORY = 5;
 const CACHE_TTL_MS = 15_000;
 const cache = new Map<string, { at: number; results: GlobalSearchResult[]; truncated: boolean }>();
@@ -46,13 +47,27 @@ function makeSnippet(data: Record<string, any>, keys: string[], term: string): s
   return (start > 0 ? '…' : '') + match.slice(start, start + 150) + (start + 150 < match.length ? '…' : '');
 }
 
-async function readCollection(ref: any): Promise<{ rows: Array<{ id: string; data: Record<string, any> }>; truncated: boolean }> {
-  // Bound each collection scan so broad searches remain responsive and read costs predictable.
-  const snap = await getDocs(query(ref, orderByDocumentId(), limit(MAX_DOCS_PER_COLLECTION)));
-  return {
-    rows: snap.docs.map((doc: any) => ({ id: doc.id, data: doc.data() as Record<string, any> })),
-    truncated: snap.docs.length === MAX_DOCS_PER_COLLECTION,
-  };
+async function readCollection(ref: any, cacheKey: string): Promise<{ rows: Array<{ id: string; data: Record<string, any> }>; truncated: boolean }> {
+  const cached = collectionCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < COLLECTION_CACHE_TTL_MS) {
+    return { rows: cached.rows, truncated: false };
+  }
+  // Scan the complete tenant-scoped collection in stable document-ID pages.
+  // The short in-memory cache prevents one Firestore rescan for every typed character.
+  const rows: Array<{ id: string; data: Record<string, any> }> = [];
+  let cursor = '';
+  while (true) {
+    const constraints: any[] = [orderByDocumentId()];
+    if (cursor) constraints.push(startAfterId(cursor));
+    constraints.push(limit(250));
+    const snap = await getDocs(query(ref, ...constraints));
+    if (!snap.docs.length) break;
+    for (const doc of snap.docs) rows.push({ id: doc.id, data: doc.data() as Record<string, any> });
+    cursor = snap.docs[snap.docs.length - 1].id;
+    if (snap.docs.length < 250) break;
+  }
+  collectionCache.set(cacheKey, { at: Date.now(), rows });
+  return { rows, truncated: false };
 }
 
 function canSearchModule(module: SearchModule, allowed: Set<string>, isAdmin: boolean): boolean {
@@ -101,10 +116,9 @@ export async function searchTenantWorkspace(
   const visibleSpecs = specs.filter((spec) => canSearchModule(spec.module, allowed, isAdmin));
   const categoryCounts = new Map<string, number>();
   const results: GlobalSearchResult[] = [];
-  let truncated = false;
   const batches = await Promise.all(visibleSpecs.map(async (spec) => {
     try {
-      const scanned = await readCollection(spec.ref);
+      const scanned = await readCollection(spec.ref, ctx.tenantId + ':' + spec.category + ':' + visibleSpecs.indexOf(spec));
       return { spec, rows: scanned.rows, truncated: scanned.truncated, failed: false };
     } catch {
       return { spec, rows: [], truncated: false, failed: true };
@@ -113,7 +127,6 @@ export async function searchTenantWorkspace(
 
   for (const batch of batches) {
     const { spec, rows } = batch;
-    if (batch.truncated) truncated = true;
     for (const row of rows) {
       const categoryCount = categoryCounts.get(spec.category) || 0;
       if (categoryCount >= MAX_RESULTS_PER_CATEGORY) continue;
@@ -162,7 +175,7 @@ export async function searchTenantWorkspace(
 
   const sorted = results.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
   const capped = sorted.slice(0, 35);
-  const result = { query: term, results: capped, total: capped.length, truncated };
+  const result = { query: term, results: capped, total: capped.length, truncated: false };
   cache.set(cacheKey, { at: Date.now(), results: capped, truncated });
   return result;
 }

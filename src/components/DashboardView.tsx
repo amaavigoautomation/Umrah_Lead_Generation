@@ -394,7 +394,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.88fr]">
-        <section className="dashboard-content-card rounded-xl border border-[#dfe5f0] bg-white p-5 shadow-[0_1px_3px_rgba(8,11,50,.035)]">
+        <section className="dashboard-content-card self-start rounded-xl border border-[#dfe5f0] bg-white p-5 shadow-[0_1px_3px_rgba(8,11,50,.035)]">
           <div className="flex items-start justify-between gap-3">
             <div><h2 className="dashboard-card-heading text-sm font-bold text-[#080b32]">Lead acquisition trend</h2><p className="dashboard-card-description mt-1 text-xs text-slate-400">New leads created in the last six months</p></div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-[#0848ef]"><CalendarDays className="h-3 w-3" /> Monthly</span>

@@ -1264,7 +1264,7 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                     if (sortField === 'score') setSortAsc(!sortAsc);
                     else { setSortField('score'); setSortAsc(false); }
                   }}>
-                    <span>Source / Score</span>
+                    <span>Source / AI Score</span>
                     <span className="crm-heading-sort">{sortField === 'score' ? (sortAsc ? '↑' : '↓') : <ArrowUpDown className="w-3 h-3" />}</span>
                   </th>
                   <th>Note / Profile</th>
@@ -1484,28 +1484,30 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
                             <span>{lead.source || 'MANUAL'}</span>
                           </span>
                           <span className={`crm-score-pill ${(lead.leadScore || 0) >= 80 ? 'is-hot' : (lead.leadScore || 0) >= 50 ? 'is-warm' : 'is-cold'}`}>
-                            <Flame className="w-3 h-3" /> AI {lead.leadScore || 50}
+                            <Flame className="w-3 h-3" /> {lead.leadScore || 50}
                           </span>
                         </td>
 
                         <td data-label="Note / Profile" className="crm-note-cell">
-                          <button
-                            type="button"
-                            onClick={() => setQuickNoteLead(lead)}
-                            className="crm-note-text"
-                            title={lead.notes || lead.queryMessage || 'Click to add a call note'}
-                          >
-                            {lead.notes || lead.queryMessage || '+ Add call note'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setActiveDrawerLeadId(lead.leadId)}
-                            className="crm-profile-action"
-                            title="View Lead 360° Profile"
-                            aria-label="View Lead 360° Profile"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
+                          <div className="crm-note-profile-actions">
+                            <button
+                              type="button"
+                              onClick={() => setQuickNoteLead(lead)}
+                              className="crm-note-text"
+                              title={lead.notes || lead.queryMessage || 'Click to add a call note'}
+                            >
+                              {lead.notes || lead.queryMessage || '+ Add call note'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveDrawerLeadId(lead.leadId)}
+                              className="crm-profile-action"
+                              title="View Lead 360° Profile"
+                              aria-label="View Lead 360° Profile"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

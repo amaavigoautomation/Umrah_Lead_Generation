@@ -4788,56 +4788,70 @@
 
 
 /* --------------------------------------------------------------------------
-   Platform-wide shell frame — consistent curved panels and fine separators.
-   These rules live at the application chrome level so every module inherits
-   the same right edge, footer edge, navigation divider and header divider.
+   Platform-wide application frame.
+   The same rounded perimeter is applied around the complete module workspace,
+   not only around the Dashboard. All logged-in modules render inside this shell.
    -------------------------------------------------------------------------- */
 .app-primary-nav-rail {
   box-sizing: border-box;
   border-right: 1px solid rgba(255,255,255,.13);
   border-bottom: 1px solid rgba(255,255,255,.10);
 }
+
 .app-global-topbar {
   box-sizing: border-box;
   border-bottom: 1px solid rgba(255,255,255,.12);
+  border-radius: 11px 11px 0 0;
 }
+
 .app-main-frame {
   position: relative;
   box-sizing: border-box;
   min-width: 0;
   min-height: 0;
-  border-right: 1px solid #dfe5ee;
-  border-bottom: 1px solid #dfe5ee;
-  border-radius: 0 12px 12px 0;
+  border: 1px solid #dfe5ee;
+  border-radius: 12px;
   background-clip: padding-box;
 }
+
 .app-main-frame--dark {
-  border-right-color: #2b3454;
-  border-bottom-color: #2b3454;
+  border-color: #2b3454;
 }
+
+/* Header navigation is an internal divider, not a second outer card. */
 .app-workspace-nav-frame {
-  border: 1px solid #e1e7f0 !important;
-  border-radius: 12px !important;
+  box-sizing: border-box;
+  border: 0 !important;
   border-bottom: 1px solid #e1e7f0 !important;
-  margin-bottom: 8px;
+  border-radius: 0 !important;
+  margin: 0;
   background: #fff;
 }
+
+/* The module canvas fills the shared shell; the outer shell owns its perimeter. */
 .app-workspace-content {
   box-sizing: border-box;
   min-width: 0;
   min-height: 0;
-  border: 1px solid #e1e7f0 !important;
-  border-radius: 12px !important;
+  border: 0 !important;
+  border-radius: 0 0 11px 11px !important;
   background-clip: padding-box;
 }
+
 .app-workspace-content--dark {
-  border-color: #2b3454 !important;
+  border-color: transparent !important;
 }
+
 @media (max-width: 767px) {
-  .app-main-frame { border-radius: 0 10px 10px 0; }
-  .app-workspace-nav-frame {
-    border-radius: 10px !important;
-    margin-bottom: 6px;
+  .app-main-frame {
+    border-radius: 10px;
   }
-  .app-workspace-content { border-radius: 10px !important; }
+
+  .app-global-topbar {
+    border-radius: 9px 9px 0 0;
+  }
+
+  .app-workspace-content {
+    border-radius: 0 0 9px 9px !important;
+  }
 }

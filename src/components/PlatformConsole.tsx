@@ -16,6 +16,12 @@ import {
   AlertCircle,
   RefreshCw,
   ShieldCheck,
+  Lightbulb,
+  Bug,
+  MessageSquare,
+  Clock,
+  CheckCircle2,
+  Save,
 } from 'lucide-react';
 
 import { PlansManager, type Catalog } from './PlansManager';
@@ -81,6 +87,24 @@ interface Usage {
   percentages: { aiTokens: number; dailySends?: number };
 }
 
+type FeedbackStatus = 'NEW' | 'IN_REVIEW' | 'RESOLVED' | 'CLOSED';
+interface FeedbackSubmission {
+  id: string;
+  type: 'IDEA' | 'BUG';
+  description: string;
+  status: FeedbackStatus;
+  adminNote?: string;
+  tenantId: string;
+  tenantName: string;
+  submittedBy: { uid: string; name: string; email: string; role: string };
+  contextModule?: string;
+  contextPath?: string;
+  createdAt: string;
+  updatedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+}
+
 interface Props {
   email: string;
   onLogout: () => void;
@@ -122,11 +146,38 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [view, setView] = useState<'workspaces' | 'plans' | 'legal'>('workspaces');
+  const [view, setView] = useState<'workspaces' | 'feedback' | 'plans' | 'legal'>('workspaces');
+  const [feedbackItems, setFeedbackItems] = useState<FeedbackSubmission[]>([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [feedbackSearch, setFeedbackSearch] = useState('');
+  const [feedbackTypeFilter, setFeedbackTypeFilter] = useState<'ALL' | 'IDEA' | 'BUG'>('ALL');
+  const [feedbackStatusFilter, setFeedbackStatusFilter] = useState<'ALL' | FeedbackStatus>('ALL');
+  const [selectedFeedbackId, setSelectedFeedbackId] = useState<string | null>(null);
+  const [feedbackStatusDraft, setFeedbackStatusDraft] = useState<FeedbackStatus>('NEW');
+  const [feedbackNoteDraft, setFeedbackNoteDraft] = useState('');
+  const [feedbackSaving, setFeedbackSaving] = useState(false);
   const [catalog, setCatalog] = useState<Catalog>({ plans: [], features: [], limits: [] });
   const [dateFrom, setDateFrom] = useState(currentUtcDateKey);
   const [dateTo, setDateTo] = useState(currentUtcDateKey);
   const [appliedDateRange, setAppliedDateRange] = useState(() => ({ from: currentUtcDateKey(), to: currentUtcDateKey() }));
+  const loadFeedback = useCallback(async () => {
+    setFeedbackLoading(true);
+    setFeedbackError(null);
+    try {
+      const data = await api<{ submissions: FeedbackSubmission[] }>('/api/platform/feedback');
+      setFeedbackItems(Array.isArray(data.submissions) ? data.submissions : []);
+    } catch (error: any) {
+      setFeedbackError(error?.message || 'Could not load feedback submissions.');
+    } finally {
+      setFeedbackLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (view === 'feedback') void loadFeedback();
+  }, [view, loadFeedback]);
+
   const loadCatalog = useCallback(async () => {
     try {
       setCatalog(await api<Catalog>('/api/plans'));
@@ -173,6 +224,45 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
       .filter((t) => !q || t.name?.toLowerCase().includes(q) || t.id.toLowerCase().includes(q) || t.contactEmail?.toLowerCase().includes(q));
   }, [tenants, search]);
 
+  const filteredFeedback = useMemo(() => {
+    const q = feedbackSearch.trim().toLowerCase();
+    return feedbackItems.filter((item) => {
+      if (feedbackTypeFilter !== 'ALL' && item.type !== feedbackTypeFilter) return false;
+      if (feedbackStatusFilter !== 'ALL' && item.status !== feedbackStatusFilter) return false;
+      if (!q) return true;
+      return [
+        item.description, item.tenantName, item.tenantId,
+        item.submittedBy?.name, item.submittedBy?.email,
+        item.contextModule, item.id,
+      ].some((value) => String(value || '').toLowerCase().includes(q));
+    });
+  }, [feedbackItems, feedbackSearch, feedbackTypeFilter, feedbackStatusFilter]);
+  const selectedFeedback = feedbackItems.find((item) => item.id === selectedFeedbackId) || null;
+  const openFeedback = (item: FeedbackSubmission) => {
+    setSelectedFeedbackId(item.id);
+    setFeedbackStatusDraft(item.status);
+    setFeedbackNoteDraft(item.adminNote || '');
+  };
+  const saveFeedback = async () => {
+    if (!selectedFeedback) return;
+    setFeedbackSaving(true);
+    setFeedbackError(null);
+    try {
+      const saved = await api<{ success: boolean; status: FeedbackStatus; adminNote: string; updatedAt: string }>('/api/platform/feedback', {
+        method: 'PATCH',
+        body: JSON.stringify({ id: selectedFeedback.id, status: feedbackStatusDraft, adminNote: feedbackNoteDraft }),
+      });
+      setFeedbackItems((items) => items.map((item) => item.id === selectedFeedback.id
+        ? { ...item, status: saved.status, adminNote: saved.adminNote, updatedAt: saved.updatedAt }
+        : item
+      ));
+    } catch (error: any) {
+      setFeedbackError(error?.message || 'Could not update this submission.');
+    } finally {
+      setFeedbackSaving(false);
+    }
+  };
+
   const active = tenants.filter((t) => t.status !== 'suspended').length;
   const selected = tenants.find((t) => t.id === selectedId) || null;
   const usageTotals = tenants.reduce((sum, t) => {
@@ -211,13 +301,14 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5">
         <div className="inline-flex rounded-lg bg-slate-200/60 p-1 text-sm font-semibold">
-          {(['workspaces', 'plans', 'legal'] as const).map((v) => (
+          {(['workspaces', 'feedback', 'plans', 'legal'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
               className={`px-4 py-1.5 rounded-md capitalize ${view === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
             >
-              {v}
+              {v === 'feedback' ? 'Ideas & Bugs' : v}
+              {v === 'feedback' && feedbackItems.some((item) => item.status === 'NEW') && <span className="ml-1.5 rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] font-bold text-rose-700">{feedbackItems.filter((item) => item.status === 'NEW').length}</span>}
             </button>
           ))}
         </div>
@@ -232,6 +323,127 @@ export const PlatformConsole: React.FC<Props> = ({ email, onLogout }) => {
       {view === 'legal' && (
         <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
           <LegalEditor />
+        </main>
+      )}
+
+      {view === 'feedback' && (
+        <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-[9px] font-bold uppercase tracking-[.18em] text-slate-400">Customer voice</div>
+              <h1 className="mt-1 text-xl font-bold tracking-tight text-slate-900">Ideas & Bug Reports</h1>
+              <p className="mt-1 text-xs text-slate-500">Review product ideas and bug reports submitted by users across all workspaces.</p>
+            </div>
+            <button type="button" onClick={() => void loadFeedback()} disabled={feedbackLoading} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+              <RefreshCw className={`h-3.5 w-3.5 ${feedbackLoading ? 'animate-spin' : ''}`} /> Refresh
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              { label: 'All submissions', value: feedbackItems.length, icon: <MessageSquare className="h-4 w-4" />, tone: 'text-slate-700 bg-slate-100' },
+              { label: 'New', value: feedbackItems.filter((item) => item.status === 'NEW').length, icon: <Clock className="h-4 w-4" />, tone: 'text-blue-700 bg-blue-50' },
+              { label: 'Ideas', value: feedbackItems.filter((item) => item.type === 'IDEA').length, icon: <Lightbulb className="h-4 w-4" />, tone: 'text-amber-700 bg-amber-50' },
+              { label: 'Bug reports', value: feedbackItems.filter((item) => item.type === 'BUG').length, icon: <Bug className="h-4 w-4" />, tone: 'text-rose-700 bg-rose-50' },
+            ].map((stat) => (
+              <div key={stat.label} className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex items-center gap-2 text-[10px] font-semibold text-slate-500"><span className={`flex h-7 w-7 items-center justify-center rounded-lg ${stat.tone}`}>{stat.icon}</span>{stat.label}</div>
+                <div className="mt-2 text-xl font-bold tabular-nums text-slate-900">{stat.value.toLocaleString('en-US')}</div>
+              </div>
+            ))}
+          </div>
+
+          {feedbackError && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-700">{feedbackError}</div>}
+
+          <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,.85fr)]">
+            <section className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <div className="space-y-3 border-b border-slate-100 p-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input value={feedbackSearch} onChange={(event) => setFeedbackSearch(event.target.value)} placeholder="Search ideas, bugs, people or workspaces…" className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-[11px] text-slate-800 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100" />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <select value={feedbackTypeFilter} onChange={(event) => setFeedbackTypeFilter(event.target.value as any)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 outline-none">
+                    <option value="ALL">All types</option><option value="IDEA">Ideas</option><option value="BUG">Bugs</option>
+                  </select>
+                  <select value={feedbackStatusFilter} onChange={(event) => setFeedbackStatusFilter(event.target.value as any)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 outline-none">
+                    <option value="ALL">All statuses</option><option value="NEW">New</option><option value="IN_REVIEW">In review</option><option value="RESOLVED">Resolved</option><option value="CLOSED">Closed</option>
+                  </select>
+                  <span className="ml-auto self-center text-[9px] text-slate-400">{filteredFeedback.length} shown</span>
+                </div>
+              </div>
+              <div className="max-h-[680px] overflow-y-auto divide-y divide-slate-100">
+                {feedbackLoading && feedbackItems.length === 0 ? (
+                  <div className="flex items-center justify-center gap-2 p-10 text-[11px] text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Loading submissions…</div>
+                ) : filteredFeedback.length === 0 ? (
+                  <div className="p-10 text-center">
+                    <MessageSquare className="mx-auto mb-2 h-7 w-7 text-slate-300" />
+                    <p className="text-[11px] font-semibold text-slate-600">No submissions found</p>
+                    <p className="mt-1 text-[10px] text-slate-400">{feedbackItems.length === 0 ? 'Ideas and bug reports from workspace users will appear here.' : 'Try changing your filters or search.'}</p>
+                  </div>
+                ) : filteredFeedback.map((item) => (
+                  <button key={item.id} type="button" onClick={() => openFeedback(item)} className={`block w-full p-3.5 text-left transition hover:bg-slate-50 ${selectedFeedbackId === item.id ? 'bg-blue-50/70 ring-1 ring-inset ring-blue-100' : ''}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${item.type === 'BUG' ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'}`}>{item.type === 'BUG' ? <Bug className="h-4 w-4" /> : <Lightbulb className="h-4 w-4" />}</span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-[11px] font-bold text-slate-800">{item.type === 'BUG' ? 'Bug report' : 'Product idea'}</span>
+                          <span className="mt-0.5 block truncate text-[9px] text-slate-500">{item.submittedBy?.name || item.submittedBy?.email || 'Workspace user'} · {item.tenantName || item.tenantId}</span>
+                        </span>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-2 py-1 text-[8px] font-bold ${item.status === 'NEW' ? 'bg-blue-50 text-blue-700' : item.status === 'IN_REVIEW' ? 'bg-amber-50 text-amber-700' : item.status === 'RESOLVED' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{item.status.replace('_', ' ')}</span>
+                    </div>
+                    <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-[10px] leading-relaxed text-slate-600">{item.description}</p>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[9px] text-slate-400"><span className="truncate">{item.submittedBy?.email || item.tenantId}</span><span className="shrink-0">{item.createdAt ? new Date(item.createdAt).toLocaleString() : '—'}</span></div>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="min-w-0 rounded-xl border border-slate-200 bg-white">
+              {!selectedFeedback ? (
+                <div className="flex min-h-[360px] flex-col items-center justify-center p-8 text-center">
+                  <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-500"><MessageSquare className="h-5 w-5" /></span>
+                  <p className="text-[12px] font-bold text-slate-800">Submission details</p>
+                  <p className="mt-1 max-w-[230px] text-[10px] leading-relaxed text-slate-400">Select an idea or bug report to review its details and update its status.</p>
+                </div>
+              ) : (
+                <div className="space-y-4 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className={`mb-1 inline-flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider ${selectedFeedback.type === 'BUG' ? 'text-rose-600' : 'text-amber-600'}`}>{selectedFeedback.type === 'BUG' ? <Bug className="h-3.5 w-3.5" /> : <Lightbulb className="h-3.5 w-3.5" />}{selectedFeedback.type === 'BUG' ? 'Bug report' : 'Product idea'}</div>
+                      <h2 className="text-[13px] font-bold text-slate-900">Submission details</h2>
+                    </div>
+                    <span className="max-w-[120px] truncate rounded-md bg-slate-100 px-2 py-1 font-mono text-[8px] text-slate-500">{selectedFeedback.id}</span>
+                  </div>
+                  <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                    <p className="whitespace-pre-wrap break-words text-[11px] leading-[1.7] text-slate-700">{selectedFeedback.description}</p>
+                  </div>
+
+                  <div className="space-y-2 rounded-lg border border-slate-100 p-3">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Submitted by</div>
+                    <div className="text-[11px] font-bold text-slate-800">{selectedFeedback.submittedBy?.name || 'Workspace user'}</div>
+                    <div className="text-[10px] text-slate-500">{selectedFeedback.submittedBy?.email || '—'} · {selectedFeedback.submittedBy?.role || 'member'}</div>
+                    <div className="border-t border-slate-100 pt-2 text-[10px] text-slate-700"><span className="font-semibold">Workspace:</span> {selectedFeedback.tenantName || selectedFeedback.tenantId} <span className="font-mono text-[9px] text-slate-400">({selectedFeedback.tenantId})</span></div>
+                    <div className="text-[10px] text-slate-500"><span className="font-semibold text-slate-700">Submitted:</span> {selectedFeedback.createdAt ? new Date(selectedFeedback.createdAt).toLocaleString() : '—'}</div>
+                    <div className="text-[10px] text-slate-500"><span className="font-semibold text-slate-700">From:</span> {selectedFeedback.contextModule || 'Unknown module'} · <span className="font-mono">{selectedFeedback.contextPath || '—'}</span></div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-semibold text-slate-700">Status</label>
+                    <select value={feedbackStatusDraft} onChange={(event) => setFeedbackStatusDraft(event.target.value as FeedbackStatus)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-800 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100">
+                      <option value="NEW">New</option><option value="IN_REVIEW">In review</option><option value="RESOLVED">Resolved</option><option value="CLOSED">Closed</option>
+                    </select>
+                    <label className="block pt-1 text-[10px] font-semibold text-slate-700">Internal note</label>
+                    <textarea value={feedbackNoteDraft} onChange={(event) => setFeedbackNoteDraft(event.target.value)} maxLength={5000} rows={4} placeholder="Add an internal note for the product team…" className="w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-[10px] leading-relaxed text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100" />
+                    <button type="button" onClick={() => void saveFeedback()} disabled={feedbackSaving} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-[10px] font-semibold text-white hover:bg-slate-800 disabled:opacity-50">
+                      {feedbackSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Save review
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+          </div>
         </main>
       )}
 

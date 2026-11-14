@@ -1073,6 +1073,120 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
     }
   }
 
+  // Product feedback: tenant users can submit ideas/bugs; only platform admins can review all records.
+  if (url === '/api/feedback' && req.method === 'POST') {
+    if (!isFirebaseConfigured || !db) {
+      res.statusCode = 503;
+      res.end(JSON.stringify({ error: 'Feedback storage is not configured.' }));
+      return true;
+    }
+    const type = String(body?.type || '').toUpperCase();
+    const description = String(body?.description || '').replace(/\\u0000/g, '').trim().slice(0, 10000);
+    if (!['IDEA', 'BUG'].includes(type) || description.length < 10) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: 'Choose Idea or Bug and provide at least 10 characters of detail.' }));
+      return true;
+    }
+    try {
+      const [userSnap, legacyUserSnap, tenantSnap] = await Promise.all([
+        getDoc(globalUserDoc(userUid)).catch(() => null),
+        getDoc(doc(db, 'app_users', userUid)).catch(() => null),
+        isPlatformAdmin ? Promise.resolve(null) : getDoc(globalTenantDoc(resolvedTenantId)).catch(() => null),
+      ]);
+      const profile = (userSnap?.exists() ? userSnap.data() : legacyUserSnap?.exists() ? legacyUserSnap.data() : {}) as Record<string, any>;
+      const tenant = tenantSnap?.exists() ? tenantSnap.data() as Record<string, any> : {};
+      const id = 'fb_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 12);
+      const createdAt = new Date().toISOString();
+      const record = {
+        id,
+        type,
+        description,
+        status: 'NEW',
+        adminNote: '',
+        tenantId: resolvedTenantId,
+        tenantName: isPlatformAdmin ? 'Platform' : String(tenant.name || resolvedTenantId),
+        submittedBy: {
+          uid: userUid,
+          name: String(profile.name || profile.displayName || userEmail.split('@')[0] || 'Workspace user').slice(0, 160),
+          email: userEmail,
+          role: userRole,
+        },
+        contextModule: String(body?.contextModule || '').slice(0, 80),
+        contextPath: String(body?.contextPath || '').slice(0, 240),
+        userAgent: String(req.headers['user-agent'] || '').slice(0, 500),
+        createdAt,
+        updatedAt: createdAt,
+      };
+      await setDoc(doc(db, 'platform_feedback_submissions', id), record);
+      res.statusCode = 201;
+      res.end(JSON.stringify({ success: true, feedback: record }));
+    } catch (error: any) {
+      console.error('[Feedback] Could not save submission:', error?.message || error);
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: 'Could not save your feedback. Please try again.' }));
+    }
+    return true;
+  }
+
+  if (url === '/api/platform/feedback') {
+    if (!isPlatformAdmin) {
+      res.statusCode = 403;
+      res.end(JSON.stringify({ error: 'Platform admin access is required.' }));
+      return true;
+    }
+    if (!isFirebaseConfigured || !db) {
+      res.statusCode = 503;
+      res.end(JSON.stringify({ error: 'Feedback storage is not configured.' }));
+      return true;
+    }
+    try {
+      if (req.method === 'GET') {
+        const snap = await getDocs(collection(db, 'platform_feedback_submissions'));
+        const submissions = snap.docs
+          .map((entry) => ({ ...(entry.data() as Record<string, any>), id: entry.id }))
+          .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+          .slice(0, 1000);
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, submissions }));
+        return true;
+      }
+      if (req.method === 'PATCH') {
+        const id = String(body?.id || '').trim();
+        const status = String(body?.status || '').toUpperCase();
+        const adminNote = String(body?.adminNote || '').replace(/\\u0000/g, '').trim().slice(0, 5000);
+        if (!/^fb_[a-z0-9_]+$/i.test(id) || !['NEW', 'IN_REVIEW', 'RESOLVED', 'CLOSED'].includes(status)) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: 'A valid submission and status are required.' }));
+          return true;
+        }
+        const ref = doc(db, 'platform_feedback_submissions', id);
+        const existing = await getDoc(ref);
+        if (!existing.exists()) {
+          res.statusCode = 404;
+          res.end(JSON.stringify({ error: 'Feedback submission not found.' }));
+          return true;
+        }
+        const now = new Date().toISOString();
+        await updateDoc(ref, {
+          status,
+          adminNote,
+          updatedAt: now,
+          ...(status === 'RESOLVED' || status === 'CLOSED' ? { reviewedAt: now, reviewedBy: userEmail } : {}),
+        });
+        res.statusCode = 200;
+        res.end(JSON.stringify({ success: true, id, status, adminNote, updatedAt: now }));
+        return true;
+      }
+      res.statusCode = 405;
+      res.end(JSON.stringify({ error: 'Method not allowed.' }));
+    } catch (error: any) {
+      console.error('[Platform Feedback] Request failed:', error?.message || error);
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: 'Could not process feedback request.' }));
+    }
+    return true;
+  }
+
   // Global Search: all searchable records are queried inside the authenticated tenant scope.
   if (url === '/api/search' && req.method === 'GET') {
     const searchParams = new URL(req.url || '/', 'http://localhost').searchParams;

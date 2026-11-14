@@ -23,6 +23,9 @@ import {
   ChevronRight,
   Grid2X2,
   X,
+  Lightbulb,
+  Bug,
+  CheckCircle2,
 } from 'lucide-react';
 import { useBrand } from '../context/BrandContext';
 import { ActiveTab } from './Navbar';
@@ -129,6 +132,12 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   const workspaceName = brand.companyName || currentTenant?.name || 'UMRAH360';
   const [activePopover, setActivePopover] = useState<'search' | 'help' | 'account' | null>(null);
   const [appsExpanded, setAppsExpanded] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackType, setFeedbackType] = useState<'IDEA' | 'BUG'>('IDEA');
+  const [feedbackDescription, setFeedbackDescription] = useState('');
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackError, setFeedbackError] = useState('');
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [globalQuery, setGlobalQuery] = useState('');
   const [globalResults, setGlobalResults] = useState<any[]>([]);
   const [globalLoading, setGlobalLoading] = useState(false);
@@ -278,6 +287,37 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
       return allowed && !planLocked?.(item.id);
     });
   }, [currentUser, planLocked]);
+
+  const submitFeedback = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const description = feedbackDescription.trim();
+    if (description.length < 10) {
+      setFeedbackError('Please add a little more detail (at least 10 characters).');
+      return;
+    }
+    setFeedbackSubmitting(true);
+    setFeedbackError('');
+    try {
+      const response = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: feedbackType,
+          description,
+          contextModule: activeTab,
+          contextPath: window.location.pathname + window.location.search,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Could not submit your feedback.');
+      setFeedbackSubmitted(true);
+      setFeedbackDescription('');
+    } catch (error: any) {
+      setFeedbackError(error?.message || 'Could not submit your feedback. Please try again.');
+    } finally {
+      setFeedbackSubmitting(false);
+    }
+  };
 
   const openPopover = (name: 'search' | 'help' | 'account') => {
     setActivePopover((current) => current === name ? null : name);
@@ -445,16 +485,21 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
               </div>
             )}
             {activePopover === 'help' && (
-              <div className="absolute right-0 top-[calc(100%+12px)] z-[70] w-[min(285px,calc(100vw-24px))] rounded-xl border border-slate-200 bg-white p-3 text-slate-800 shadow-[0_18px_50px_rgba(15,23,42,.18)]">
-                <div className="mb-2">
-                  <p className="text-[12px] font-bold text-slate-900">Need help?</p>
-                  <p className="mt-1 text-[10px] leading-relaxed text-slate-500">Browse your workspace knowledge or open workspace settings for account and team support.</p>
-                </div>
-                <button type="button" onClick={() => navigateAndClose('knowledge')} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[11px] font-semibold text-slate-700 hover:bg-blue-50 hover:text-[#155eef]">
-                  <BookOpen className="h-4 w-4" /> Knowledge Base <ChevronRight className="ml-auto h-3.5 w-3.5" />
-                </button>
-                <button type="button" onClick={() => navigateAndClose('workspace')} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[11px] font-semibold text-slate-700 hover:bg-blue-50 hover:text-[#155eef]">
-                  <Building2 className="h-4 w-4" /> Workspace settings <ChevronRight className="ml-auto h-3.5 w-3.5" />
+              <div className="absolute right-0 top-[calc(100%+12px)] z-[70] w-[min(190px,calc(100vw-24px))] rounded-lg border border-slate-200 bg-white p-1.5 text-slate-800 shadow-[0_14px_40px_rgba(15,23,42,.18)]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActivePopover(null);
+                    setFeedbackType('IDEA');
+                    setFeedbackDescription('');
+                    setFeedbackError('');
+                    setFeedbackSubmitted(false);
+                    setShowFeedbackModal(true);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] font-semibold text-slate-700 transition hover:bg-blue-50 hover:text-[#155eef]"
+                >
+                  <Lightbulb className="h-3.5 w-3.5" />
+                  Share an idea
                 </button>
               </div>
             )}
@@ -558,6 +603,80 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           })}
         </nav>
       </div>}
+      {showFeedbackModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-3 sm:p-5"
+          role="presentation"
+          onMouseDown={(event) => { if (event.target === event.currentTarget && !feedbackSubmitting) setShowFeedbackModal(false); }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-feedback-title"
+            className="w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 shadow-[0_24px_80px_rgba(2,6,23,.30)] sm:p-6"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <h2 id="share-feedback-title" className="text-[17px] font-bold tracking-tight text-slate-900">Share an Idea</h2>
+              <button type="button" onClick={() => setShowFeedbackModal(false)} disabled={feedbackSubmitting} aria-label="Close feedback form" className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="h-4 w-4" /></button>
+            </div>
+
+            {feedbackSubmitted ? (
+              <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
+                <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"><CheckCircle2 className="h-6 w-6" /></span>
+                <h3 className="text-[15px] font-bold text-slate-900">Thanks for sharing!</h3>
+                <p className="mt-1 max-w-sm text-[11px] leading-relaxed text-slate-500">Your {feedbackType === 'BUG' ? 'bug report' : 'idea'} has been sent to the Amaavigo team.</p>
+                <button type="button" onClick={() => setShowFeedbackModal(false)} className="mt-5 rounded-lg bg-[#155eef] px-5 py-2 text-[11px] font-semibold text-white hover:bg-blue-700">Done</button>
+              </div>
+            ) : (
+              <form onSubmit={submitFeedback} className="space-y-5">
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-semibold text-slate-700">What is this?</label>
+                  <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
+                    <button type="button" onClick={() => setFeedbackType('IDEA')} aria-pressed={feedbackType === 'IDEA'} className={`rounded-md px-3 py-1.5 text-[10px] font-semibold transition ${feedbackType === 'IDEA' ? 'bg-slate-100 text-slate-900 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}>Idea</button>
+                    <button type="button" onClick={() => setFeedbackType('BUG')} aria-pressed={feedbackType === 'BUG'} className={`rounded-md px-3 py-1.5 text-[10px] font-semibold transition ${feedbackType === 'BUG' ? 'bg-slate-100 text-slate-900 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}>Bug</button>
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="share-feedback-description" className="mb-2 block text-[10px] font-semibold text-slate-800">Tell us about it <span className="text-rose-500">*</span></label>
+                  <textarea
+                    id="share-feedback-description"
+                    autoFocus
+                    required
+                    minLength={10}
+                    maxLength={10000}
+                    rows={8}
+                    value={feedbackDescription}
+                    onChange={(event) => setFeedbackDescription(event.target.value)}
+                    placeholder={feedbackType === 'BUG'
+                      ? 'What happened? What did you expect to happen? How can we reproduce it?'
+                      : 'What are you trying to do? How do you do it today? What would you like instead?'}
+                    className="min-h-[190px] w-full resize-y rounded-lg border border-slate-300 px-3.5 py-3 text-[11px] leading-relaxed text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#155eef] focus:ring-2 focus:ring-blue-100"
+                  />
+                  <div className="mt-1 flex justify-between gap-3">
+                    <span className="text-[9px] text-slate-400">{feedbackDescription.trim().length < 10 ? 'Please enter at least 10 characters.' : 'Thanks — detailed feedback helps us act faster.'}</span>
+                    <span className="shrink-0 text-[9px] tabular-nums text-slate-400">{feedbackDescription.length.toLocaleString('en-IN')} / 10,000</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 text-[9px] text-slate-500">
+                  <ShieldCheck className="h-3 w-3" />
+                  Sharing from <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-slate-600">{window.location.pathname || '/'}</span>
+                </div>
+                {feedbackError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[10px] text-rose-700">{feedbackError}</p>}
+                <div className="flex items-center justify-between border-t border-slate-100 pt-4">
+                  <button type="button" onClick={() => setShowFeedbackModal(false)} disabled={feedbackSubmitting} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-[10px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+                  <button type="submit" disabled={feedbackSubmitting || feedbackDescription.trim().length < 10} className="inline-flex items-center gap-2 rounded-lg bg-[#155eef] px-4 py-2 text-[10px] font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+                    {feedbackSubmitting && <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
+                    {feedbackSubmitting ? 'Sharing…' : feedbackType === 'BUG' ? 'Share bug' : 'Share idea'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </section>
+        </div>
+      )}
     </header>
   );
 };

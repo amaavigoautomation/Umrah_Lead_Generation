@@ -192,10 +192,10 @@ const Reveal: React.FC<{ children: React.ReactNode; className?: string; delay?: 
   return (
     <motion.div
       className={className}
-      initial={reduced ? false : { opacity: 0, y: 24, filter: 'blur(4px)' }}
-      whileInView={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-      viewport={{ once: true, amount: 0.12 }}
-      transition={{ duration: reduced ? 0 : 0.72, delay: reduced ? 0 : delay, ease: EASE }}
+      initial={reduced ? false : { opacity: 0, y: 38, scale: .965, filter: 'blur(7px)' }}
+      whileInView={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+      viewport={{ once: true, amount: 0.16 }}
+      transition={{ duration: reduced ? 0 : .88, delay: reduced ? 0 : delay, ease: EASE }}
     >
       {children}
     </motion.div>
@@ -281,50 +281,70 @@ const SiteFooter: React.FC = () => (
 );
 
 const HeroWorkspace: React.FC = () => {
-  const [selected, setSelected] = useState(0);
-  const thread = THREADS[selected];
+  const reduced = useReducedMotion();
   return (
-    <div className="av-hero-product">
-      <div className="av-product-aura" />
-      <div className="av-product-grid" />
-      <motion.div className="av-product-shell" initial={{ opacity: 0, y: 35, rotateX: 3, rotateY: -4 }} animate={{ opacity: 1, y: 0, rotateX: 0, rotateY: 0 }} transition={{ duration: 1.05, delay: .14, ease: EASE }} style={{ transformPerspective: 1500 }}>
-        <div className="av-product-topbar"><div className="av-window-controls"><i /><i /><i /></div><div className="av-url-bar"><ShieldCheck size={11} /> app.amaavigo.com</div><span className="av-product-live"><i /> Workspace</span><span className="av-product-avatar">A</span></div>
-        <div className="av-product-app">
-          <aside className="av-product-sidebar">
-            <div className="av-product-wordmark"><span>A</span> amaavigo</div>
-            <div className="av-side-item"><Layers size={14} /> Dashboard</div>
-            <div className="av-side-item is-selected"><Inbox size={14} /> Unified Inbox <b>3</b></div>
-            <div className="av-side-item"><Users size={14} /> CRM</div>
-            <div className="av-side-item"><Database size={14} /> Databases</div>
-            <div className="av-side-item"><Bot size={14} /> AI Agent</div>
-            <div className="av-side-item"><CalendarCheck size={14} /> Scheduling</div>
-            <div className="av-side-item"><Send size={14} /> Campaigns</div>
-            <div className="av-side-item"><BarChart3 size={14} /> Reports</div>
-            <div className="av-sidebar-bottom"><span className="av-sidebar-user">PC</span><span>Workspace</span></div>
-          </aside>
-          <div className="av-product-content">
-            <div className="av-product-heading"><div><small>CONVERSATION MANAGEMENT</small><strong>Unified Inbox</strong></div><div className="av-product-search"><Search size={12} /> Search conversations</div><button type="button" aria-label="Notifications"><Bell size={15} /></button></div>
-            <div className="av-product-filters"><span className="is-current">All conversations <b>24</b></span><span>Unread</span><span>AI active</span><span>Human handoff</span></div>
-            <div className="av-product-panels">
-              <div className="av-thread-list">
-                <div className="av-thread-list-head"><strong>Conversations</strong><Filter size={13} /></div>
-                {THREADS.map((item, index) => <button key={item.name} type="button" className={selected === index ? 'av-thread is-active' : 'av-thread'} onClick={() => setSelected(index)}>
-                  <span className={'av-thread-avatar ' + item.color}>{item.initials}</span><span className="av-thread-main"><b>{item.name}</b><small>{item.preview}</small></span><span className="av-thread-time">{item.time}</span>
-                </button>)}
-              </div>
-              <div className="av-message-panel">
-                <div className="av-message-head"><span className={'av-thread-avatar ' + thread.color}>{thread.initials}</span><span><b>{thread.name}</b><small>{thread.channel} · {thread.label}</small></span><span className="av-message-status"><i /> Active</span></div>
-                <div className="av-message-stream"><div className="av-message incoming">{thread.incoming}</div><AnimatePresence mode="wait"><motion.div className="av-message ai-message" key={selected} initial={{ opacity: 0, y: 9 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: .28 }}><span><Sparkles size={10} /> AI response</span>{thread.reply}</motion.div></AnimatePresence></div>
-                <div className="av-message-composer"><span>Write a reply…</span><button type="button" aria-label="Send preview"><ArrowUpRight size={13} /></button></div>
-              </div>
-              <aside className="av-lead-panel"><small className="av-panel-overline">CONTACT CONTEXT</small><div className="av-lead-person"><span className={'av-lead-avatar ' + thread.color}>{thread.initials}</span><b>{thread.name}</b><small>New opportunity</small></div><div className="av-lead-fact"><small>Channel</small><b>{thread.channel}</b></div><div className="av-lead-fact"><small>Conversation status</small><b className="av-green">Active</b></div><div className="av-lead-fact"><small>Next step</small><b>Qualify enquiry</b></div><div className="av-lead-action"><CalendarCheck size={12} /> Schedule meeting</div></aside>
-            </div>
-          </div>
-        </div>
+    <div className="av-hero-product av-hero-art-product">
+      <div className="av-hero-art-aura" />
+      <div className="av-hero-art-orbit av-hero-art-orbit-one" />
+      <div className="av-hero-art-orbit av-hero-art-orbit-two" />
+      <motion.div
+        className="av-hero-art-frame"
+        initial={reduced ? false : { opacity: 0, y: 36, rotateY: -9, rotateX: 4, scale: .94 }}
+        animate={{ opacity: 1, y: 0, rotateY: 0, rotateX: 0, scale: 1 }}
+        transition={{ duration: reduced ? 0 : 1.15, delay: .12, ease: EASE }}
+        style={{ transformPerspective: 1400 }}
+      >
+        <img
+          src="/amaavigo-lead-journey.svg"
+          alt="A 3D illustration of lead capture, AI conversations, demo scheduling and customer growth connected by one glowing path"
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
+          draggable={false}
+        />
       </motion.div>
-      <motion.div className="av-hero-note av-note-one" animate={{ y: [0, -8, 0] }} transition={{ duration: 5.2, repeat: Infinity, ease: 'easeInOut' }}><span><Sparkles size={14} /></span><div><b>AI response prepared</b><small>Conversation context retained</small></div></motion.div>
-      <motion.div className="av-hero-note av-note-two" animate={{ y: [0, 7, 0] }} transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}><span><CalendarCheck size={14} /></span><div><b>Next step connected</b><small>Meeting can be scheduled</small></div></motion.div>
-      <div className="av-product-caption"><span>PRODUCT PREVIEW</span><i /> <span>INTERACTIVE CONVERSATION VIEW</span></div>
+
+      <motion.div
+        className="av-hero-art-badge av-hero-art-badge-lead"
+        animate={reduced ? { y: 0 } : { y: [0, -9, 0], rotate: [-1.5, -.5, -1.5] }}
+        transition={{ duration: 5.8, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        <span className="av-art-badge-icon av-art-badge-green"><MessageCircle size={16} /></span>
+        <span><b>New lead captured</b><small>WhatsApp · just now</small></span>
+        <i />
+      </motion.div>
+
+      <motion.div
+        className="av-hero-art-badge av-hero-art-badge-ai"
+        animate={reduced ? { y: 0 } : { y: [0, 8, 0], rotate: [1, 2, 1] }}
+        transition={{ duration: 6.4, delay: .4, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        <span className="av-art-badge-icon av-art-badge-blue"><Sparkles size={16} /></span>
+        <span><b>AI conversation</b><small>Lead qualified</small></span>
+        <i className="av-art-live-dot" />
+      </motion.div>
+
+      <motion.div
+        className="av-hero-art-badge av-hero-art-badge-booked"
+        animate={reduced ? { y: 0 } : { y: [0, -7, 0], rotate: [1.2, .2, 1.2] }}
+        transition={{ duration: 5.2, delay: .7, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        <span className="av-art-badge-icon av-art-badge-orange"><CalendarCheck size={16} /></span>
+        <span><b>Demo booked</b><small>Next step confirmed</small></span>
+        <CheckCircle2 size={15} className="av-art-booked-check" />
+      </motion.div>
+
+      <motion.span
+        className="av-hero-art-spark av-hero-art-spark-one"
+        animate={reduced ? { opacity: 1 } : { rotate: [0, 16, 0], scale: [1, 1.18, 1] }}
+        transition={{ duration: 4.2, repeat: Infinity, ease: 'easeInOut' }}
+      ><Sparkles size={20} /></motion.span>
+      <motion.span
+        className="av-hero-art-spark av-hero-art-spark-two"
+        animate={reduced ? { opacity: 1 } : { rotate: [0, -18, 0], scale: [1, .82, 1] }}
+        transition={{ duration: 5.1, delay: .7, repeat: Infinity, ease: 'easeInOut' }}
+      ><Zap size={17} /></motion.span>
+      <div className="av-product-caption"><span>THE CUSTOMER JOURNEY</span><i /><span>CAPTURE · CONVERSE · BOOK · GROW</span></div>
     </div>
   );
 };
@@ -414,10 +434,28 @@ const AgentSection: React.FC = () => {
 
 const CampaignStudio: React.FC = () => {
   const [tab, setTab] = useState<'whatsapp' | 'email' | 'insights'>('whatsapp');
+  const reduced = useReducedMotion();
   return (
     <section className="av-campaign-section" id="campaigns">
       <div className="av-container">
-        <div className="av-campaign-heading"><Reveal><Eyebrow>AFTER THE FIRST CONVERSATION</Eyebrow><h2>Build the campaign.<br /><span>Keep the customer context.</span></h2><p>Create communication in your own brand voice, choose the audience and understand what happened after delivery.</p><a href="/campaigns" className="av-inline-link">Explore campaigns <ArrowUpRight size={15} /></a></Reveal></div>
+        <div className="av-campaign-heading"><Reveal>
+          <div className="av-campaign-artwork">
+            <motion.img
+              src="/amaavigo-campaign-creative.svg"
+              alt="Layered creative cards for email, WhatsApp conversations and campaign analytics"
+              loading="lazy"
+              decoding="async"
+              animate={reduced ? { y: 0 } : { y: [0, -7, 0] }}
+              transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <motion.span className="av-campaign-art-chip av-campaign-art-chip-one" animate={reduced ? { y: 0 } : { y: [0, -6, 0] }} transition={{ duration: 4.8, repeat: Infinity, ease: 'easeInOut' }}><Sparkles size={12} /> Brand-ready creative</motion.span>
+            <motion.span className="av-campaign-art-chip av-campaign-art-chip-two" animate={reduced ? { y: 0 } : { y: [0, 5, 0] }} transition={{ duration: 5.6, delay: .4, repeat: Infinity, ease: 'easeInOut' }}><CheckCircle2 size={12} /> Audience connected</motion.span>
+          </div>
+          <Eyebrow>AFTER THE FIRST CONVERSATION</Eyebrow>
+          <h2>Build the campaign.<br /><span>Keep the customer context.</span></h2>
+          <p>Create communication in your own brand voice, choose the audience and understand what happened after delivery.</p>
+          <a href="/campaigns" className="av-inline-link">Explore campaigns <ArrowUpRight size={15} /></a>
+        </Reveal></div>
         <Reveal className="av-campaign-showcase" delay={.12}>
           <div className="av-campaign-top"><div><small>AMAAVIGO WORKSPACE</small><b>Campaign Studio</b></div><span className="av-campaign-top-status"><i /> Draft environment</span></div>
           <div className="av-campaign-tabs" role="tablist" aria-label="Campaign preview"><button type="button" className={tab === 'whatsapp' ? 'is-active' : ''} onClick={() => setTab('whatsapp')}><MessageCircle size={14} /> WhatsApp</button><button type="button" className={tab === 'email' ? 'is-active' : ''} onClick={() => setTab('email')}><Mail size={14} /> Email</button><button type="button" className={tab === 'insights' ? 'is-active' : ''} onClick={() => setTab('insights')}><BarChart3 size={14} /> Performance</button></div>

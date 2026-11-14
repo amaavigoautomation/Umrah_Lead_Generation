@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="500" viewBox="0 0 720 500" fill="none">
+<defs>
+  <linearGradient id="blue" x1="95" y1="104" x2="424" y2="426" gradientUnits="userSpaceOnUse"><stop stop-color="#DCE8FF"/><stop offset="1" stop-color="#AFC8FF"/></linearGradient>
+  <linearGradient id="violet" x1="386" y1="42" x2="645" y2="319" gradientUnits="userSpaceOnUse"><stop stop-color="#F2E8FF"/><stop offset="1" stop-color="#D9CCFF"/></linearGradient>
+  <linearGradient id="orange" x1="510" y1="306" x2="690" y2="486" gradientUnits="userSpaceOnUse"><stop stop-color="#FFE6D0"/><stop offset="1" stop-color="#F9B77E"/></linearGradient>
+  <linearGradient id="navy" x1="105" y1="171" x2="326" y2="351" gradientUnits="userSpaceOnUse"><stop stop-color="#15234A"/><stop offset="1" stop-color="#071331"/></linearGradient>
+  <linearGradient id="cta" x1="144" y1="311" x2="276" y2="348" gradientUnits="userSpaceOnUse"><stop stop-color="#0848EF"/><stop offset="1" stop-color="#4C7EFF"/></linearGradient>
+  <filter id="shadow" x="-30%" y="-30%" width="170%" height="180%" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="17" stdDeviation="16" flood-color="#1C3D82" flood-opacity=".16"/></filter>
+  <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="22"/></filter>
+</defs>
+<ellipse cx="348" cy="278" rx="302" ry="185" fill="#7E9EFF" fill-opacity=".16" filter="url(#soft)"/>
+<path d="M67 125C99 59 202 34 289 68c65 25 82 9 145-8 83-23 198 10 227 85 31 79-8 125-53 171-62 63-104 107-211 105-106-2-127-34-214-25C94 406 27 347 35 252c4-47 10-90 32-127Z" fill="url(#blue)" fill-opacity=".56"/>
+<path d="M497 41c61-32 143 2 164 54 17 43 2 82-28 109-35 32-81 24-121 6-54-24-67-99-15-169Z" fill="url(#violet)" fill-opacity=".84"/>
+<path d="M498 346c47-28 131-7 157 38 20 34 1 78-35 94-55 24-126 3-146-43-13-30-4-69 24-89Z" fill="url(#orange)" fill-opacity=".78"/>
+<path d="M60 393c-24-25-12-62 17-79 25-15 62-13 85 8 23 20 29 53 7 76-25 27-82 24-109-5Z" fill="#F7C7A6" fill-opacity=".75"/>
+<g filter="url(#shadow)" transform="rotate(-7 237 247)">
+  <rect x="76" y="116" width="275" height="270" rx="24" fill="white"/>
+  <rect x="76.7" y="116.7" width="273.6" height="268.6" rx="23.3" stroke="#C9D6EB" stroke-width="1.4"/>
+  <path d="M77 141c0-13.807 11.193-25 25-25h225c13.807 0 25 11.193 25 25v31H77v-31Z" fill="#F5F8FE"/>
+  <circle cx="103" cy="145" r="5" fill="#EF8C7B"/><circle cx="121" cy="145" r="5" fill="#F1C56A"/><circle cx="139" cy="145" r="5" fill="#62C795"/>
+  <rect x="101" y="192" width="225" height="105" rx="13" fill="url(#navy)"/>
+  <path d="m126 225 78 54 96-54" stroke="#9BB8FF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M126 225c0-5 4-9 9-9h157c5 0 9 4 9 9" stroke="#9BB8FF" stroke-width="3" stroke-linecap="round"/>
+  <rect x="104" y="315" width="129" height="8" rx="4" fill="#DDE5F1"/>
+  <rect x="104" y="332" width="190" height="7" rx="3.5" fill="#E9EEF6"/>
+  <rect x="104" y="350" width="104" height="25" rx="8" fill="url(#cta)"/>
+  <path d="M150 363h8m0 0-3-3m3 3-3 3" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g filter="url(#shadow)" transform="rotate(7 477 202)">
+  <rect x="372" y="91" width="262" height="243" rx="25" fill="white"/>
+  <rect x="372.7" y="91.7" width="260.6" height="241.6" rx="24.3" stroke="#D7D2F4" stroke-width="1.4"/>
+  <path d="M373 116c0-13.807 11.193-25 25-25h212c13.807 0 25 11.193 25 25v31H373v-31Z" fill="#FAF8FF"/>
+  <rect x="392" y="110" width="8" height="8" rx="4" fill="#EF8C7B"/><rect x="407" y="110" width="8" height="8" rx="4" fill="#F1C56A"/><rect x="422" y="110" width="8" height="8" rx="4" fill="#62C795"/>
+  <circle cx="415" cy="177" r="17" fill="#E5EDFF"/><path d="M407 177h16m-8-8v16" stroke="#155EEF" stroke-width="2.5" stroke-linecap="round"/>
+  <rect x="443" y="166" width="143" height="8" rx="4" fill="#7587A9"/><rect x="443" y="181" width="103" height="6" rx="3" fill="#D1D9E8"/>
+  <rect x="394" y="211" width="212" height="54" rx="12" fill="#F0F5FF"/>
+  <rect x="408" y="226" width="136" height="7" rx="3.5" fill="#B6C6E5"/><rect x="408" y="241" width="174" height="6" rx="3" fill="#D0DBEF"/>
+  <rect x="416" y="281" width="174" height="34" rx="12" fill="#E7F0FF"/>
+  <rect x="429" y="294" width="81" height="7" rx="3.5" fill="#6D91DA"/>
+  <circle cx="566" cy="298" r="10" fill="#2AB67C"/><path d="m562 298 3 3 5-6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g filter="url(#shadow)" transform="rotate(-3 533 400)">
+  <rect x="452" y="346" width="208" height="119" rx="18" fill="white"/>
+  <rect x="452.7" y="346.7" width="206.6" height="117.6" rx="17.3" stroke="#F1D7C4" stroke-width="1.4"/>
+  <rect x="471" y="365" width="92" height="7" rx="3.5" fill="#9AA9C1"/>
+  <path d="M475 434v-22m25 22v-39m25 39v-51m25 51v-31m25 31v-61" stroke="#155EEF" stroke-width="12" stroke-linecap="round"/>
+  <path d="m475 401 25-12 25-8 25-14 25-15" stroke="#EF741A" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="600" cy="366" r="15" fill="#FFF0E4"/><path d="m593 366 5 5 9-10" stroke="#E87521" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g filter="url(#shadow)">
+  <rect x="278" y="355" width="135" height="58" rx="16" fill="#101F47"/>
+  <circle cx="306" cy="384" r="15" fill="#235FE8"/>
+  <path d="M300 381c0-4 3-7 7-7s7 3 7 7-3 7-7 7" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M302 392h11" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+  <rect x="329" y="375" width="63" height="6" rx="3" fill="#A6B9E3"/>
+  <rect x="329" y="388" width="45" height="5" rx="2.5" fill="#647CA8"/>
+</g>
+<path d="M55 86l-8-20m31 14 7-23m-25 41-22 2" stroke="#EF741A" stroke-width="4" stroke-linecap="round"/>
+<path d="m667 277 19-13m-13 37 26 1m-37-20 13-24" stroke="#155EEF" stroke-width="3.5" stroke-linecap="round"/>
+<circle cx="679" cy="90" r="8" fill="#EF741A"/><circle cx="52" cy="320" r="6" fill="#155EEF"/><circle cx="357" cy="52" r="5" fill="#EF741A"/>
+</svg>

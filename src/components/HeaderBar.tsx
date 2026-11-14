@@ -357,7 +357,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
 
   return (
     <header className="sticky top-0 z-30 shrink-0 border-b-0 bg-white">
-      <div className="flex min-h-[56px] items-center justify-between gap-4 bg-[#05051f] px-4 text-white sm:px-6">
+      <div className="app-global-topbar flex min-h-[56px] items-center justify-between gap-4 bg-[#05051f] px-4 text-white sm:px-6">
         <div className="flex min-w-0 items-center gap-4">
           <div className="min-w-0">
             <div className="mb-0.5 flex items-center gap-2 text-[8px] font-bold uppercase tracking-[0.2em] text-slate-400">

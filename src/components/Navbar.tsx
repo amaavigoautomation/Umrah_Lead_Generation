@@ -96,7 +96,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isItemAccessible = (item: PrimaryNavItem) => item.tabs.some((tab) => isModuleAccessible(tab));
 
   const sidebarContent = (
-    <div className="flex h-full w-[56px] shrink-0 flex-col items-center overflow-hidden bg-[#05051f] text-white select-none">
+    <div className="app-primary-nav-rail flex h-full w-[56px] shrink-0 flex-col items-center overflow-hidden bg-[#05051f] text-white select-none">
       <div className="flex h-[56px] w-full shrink-0 items-center justify-center border-b border-white/10">
         <button type="button" onClick={() => handleSelectTab('dashboard')} title="Go to Home dashboard" aria-label="Go to Home dashboard" className="flex h-full w-full items-center justify-center transition hover:bg-white/[.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-blue-400">
           <Umrah360Logo size="sm" systemBadge="" showSubtitle={false} lightOnDark compactMark />

@@ -1,5 +1,5 @@
 import { db, isFirebaseConfigured } from '../firebase/config';
-import { collection, doc, setDoc, getDocs, query, orderBy, limit as firestoreLimit } from 'firebase/firestore';
+import { collection, doc, setDoc, getDocs, query, orderBy, limit as firestoreLimit } from './clientDb';
 import { AuditLog, AuditModule, AuditSeverity, AuditActor, AuditTarget } from '../types';
 
 export async function logAuditEvent(

@@ -1,4 +1,4 @@
-import { setDoc, type DocumentReference, type SetOptions } from 'firebase/firestore';
+import { setDoc, type DocumentReference, type SetOptions } from './clientDb';
 
 /** Browser-side copy of the server's safeSetDoc (client SDK; never import server code in the browser). */
 function sanitize<T>(obj: T): T {

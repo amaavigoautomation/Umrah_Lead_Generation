@@ -1,13 +1,4 @@
 import { initializeApp, getApps } from 'firebase/app';
-import {
-  getFirestore,
-  initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
-  Firestore,
-  doc,
-  getDocFromServer,
-} from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import rawFirebaseConfig from './appletConfig.js';
 
@@ -70,34 +61,12 @@ export const app =
   getApps().find((a) => a.name === '[DEFAULT]') ||
   initializeApp(webApiKeyMissing ? { ...firebaseConfig, apiKey: 'missing-web-api-key' } : firebaseConfig);
 
-function createDb(): Firestore {
-  const dbId = firebaseConfig.firestoreDatabaseId || undefined;
-  const isBrowser = typeof window !== 'undefined' && typeof indexedDB !== 'undefined';
-  if (isBrowser) {
-    try {
-      const settings = { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) };
-      return dbId ? initializeFirestore(app, settings, dbId) : initializeFirestore(app, settings);
-    } catch (err) {
-      console.warn('[Firebase] Local cache not enabled:', err);
-    }
-  }
-  return dbId ? getFirestore(app, dbId) : getFirestore(app);
-}
-export const db: Firestore = createDb();
+/**
+ * Data access in the browser goes through the authenticated /api/db endpoint (MongoDB lives on the
+ * server). Firebase is used only for sign-in. `db` is re-exported so existing imports keep working.
+ */
+export { db } from '../services/clientDb';
 
 export const auth: Auth = getAuth(app);
 
 export const isFirebaseConfigured = Boolean(firebaseConfig.projectId && (firebaseConfig.apiKey || typeof window === 'undefined'));
-
-async function testFirestoreConnection() {
-  if (typeof window === 'undefined') return;
-  if (!isFirebaseConfigured || !db) return;
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firebase client is offline or connection not established.');
-    }
-  }
-}
-testFirestoreConnection();

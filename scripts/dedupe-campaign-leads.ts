@@ -13,6 +13,7 @@
  *
  * Cost: one read per campaign lead, once. Requires FIREBASE_SERVICE_ACCOUNT_JSON.
  */
+import type { DocumentSnapshot } from '../src/server/mongo/firestoreCompat.js';
 import 'dotenv/config';
 import { getAdminFirestore } from '../src/server/firebaseAdmin.js';
 
@@ -43,7 +44,7 @@ async function main() {
     const leadsSnap = await tenantRef.collection('campaign_leads').get();
 
     // campaignId -> email -> docs
-    const groups = new Map<string, Map<string, FirebaseFirestore.QueryDocumentSnapshot[]>>();
+    const groups = new Map<string, Map<string, DocumentSnapshot[]>>();
     for (const d of leadsSnap.docs) {
       const l = d.data();
       const email = normalizeEmail(l.email);
@@ -55,7 +56,7 @@ async function main() {
     }
 
     for (const [campaignId, byEmail] of groups) {
-      const toDelete: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+      const toDelete: DocumentSnapshot[] = [];
       for (const docs of byEmail.values()) {
         if (docs.length < 2) continue;
         const sorted = [...docs].sort((a, b) => {

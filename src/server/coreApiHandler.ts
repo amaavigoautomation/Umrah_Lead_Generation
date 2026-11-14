@@ -90,6 +90,7 @@ import {
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { searchTenantWorkspace } from './globalSearchService.js';
 import { db } from './adminFirestore.js';
+import { handleClientDataRequest } from './clientDataApi.js';
 import { getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, doc, query as fsQuery, where as fsWhere, countDocs, sumDocs } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
 import {
@@ -1071,6 +1072,17 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       res.end(JSON.stringify({ error: err?.message || 'Brand request failed' }));
       return true;
     }
+  }
+
+  // Browser data access (replaces the browser's direct Firestore connection). Authorization mirrors the
+  // old firestore.rules and is enforced in handleClientDataRequest from the verified session only.
+  if (url === '/api/db' && req.method === 'POST') {
+    const result = await handleClientDataRequest(activeTenantCtx, body);
+    res.statusCode = result.status;
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'no-store');
+    res.end(JSON.stringify(result.payload));
+    return true;
   }
 
   // Product feedback: tenant users can submit ideas/bugs; only platform admins can review all records.

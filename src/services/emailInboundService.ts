@@ -13,7 +13,7 @@ import { retrieveRelevantKnowledge } from './ragService';
 import { checkHumanHandoffConditions } from './aiService';
 import { getCurrentBrand } from '../context/BrandContext';
 import { db } from '../firebase/config';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc } from './clientDb';
 
 import { INBOUND_MAILBOX } from '../shared/brandLabels';
 import { normalizeChannelMode } from '../shared/channelModes';

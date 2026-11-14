@@ -54,7 +54,7 @@ import {
   WHATSAPP_BUSINESS_NUMBER_FORMATTED,
 } from './services/whatsappInboundService';
 import { db, isFirebaseConfigured } from './firebase/config';
-import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot } from './services/clientDb';
 
 // thsi is a test Screens loaded on demand (own JS files). Login, navigation and the inbox stay in the main bundle.
 const DashboardView = lazyNamed(() => import('./components/DashboardView'), 'DashboardView');

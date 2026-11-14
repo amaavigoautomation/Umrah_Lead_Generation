@@ -43,7 +43,7 @@ import {
   Users,
   Image as ImageIcon,
 } from 'lucide-react';
-import { collection, doc, setDoc, onSnapshot, getDoc, getDocs, query, where, documentId } from 'firebase/firestore';
+import { collection, doc, setDoc, onSnapshot, getDoc, getDocs, query, where, documentId } from '../services/clientDb';
 import { db, isFirebaseConfigured } from '../firebase/config.js';
 import {
   Campaign,

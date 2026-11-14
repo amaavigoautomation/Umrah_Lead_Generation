@@ -7,7 +7,7 @@ import {
   query,
   orderBy,
   onSnapshot,
-} from 'firebase/firestore';
+} from './clientDb';
 import { db } from '../firebase/config';
 import {
   Contact,

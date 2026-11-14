@@ -6,7 +6,7 @@ Multi-tenant AI lead generation and omnichannel engagement for Umrah360 (and whi
 
 ```bash
 cp .env.example .env
-# Fill Firebase, OPENAI_API_KEY / GEMINI_API_KEY, RESEND_*, SECRETS_MASTER_KEY, etc.
+# Fill MONGODB_URI, Firebase (sign-in), OPENAI_API_KEY / GEMINI_API_KEY, RESEND_*, SECRETS_MASTER_KEY, etc.
 npm install
 npm run dev          # Vite frontend (default :3000)
 # or, after build:
@@ -32,4 +32,10 @@ All three use the **same** background poller and `processLiveInboundEmail` path:
 
 ## Stack
 
-React 19 + Vite + Tailwind · Express API · Firebase Auth / Firestore · OpenAI / Gemini · Resend · Stripe · Meta WhatsApp / Instagram
+React 19 + Vite + Tailwind · Express API · MongoDB (data) · Firebase Auth (sign-in) · OpenAI / Gemini · Resend · Stripe · Meta WhatsApp / Instagram
+
+## Database: MongoDB
+
+All application data is stored in MongoDB; Firebase is used only for sign-in. See
+[MONGODB_MIGRATION.md](./MONGODB_MIGRATION.md) for the design, the cutover steps from Firestore, and the checks
+(`npm run test:mongo`, `npm run test:client-db`).

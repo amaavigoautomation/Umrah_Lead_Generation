@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import { AuditLog, AuditModule, AuditSeverity } from '../types';
 import { db, isFirebaseConfigured } from '../firebase/config';
-import { collection, onSnapshot, query, orderBy, limit, doc, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, limit, doc, setDoc } from '../services/clientDb';
 import { logAuditEvent } from '../services/auditService';
 
 interface AuditLogsViewProps {

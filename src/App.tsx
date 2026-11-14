@@ -2692,7 +2692,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
           hideModuleNavigation={activeTab === 'inbox' || activeTab === 'dashboard' || activeTab === 'agent'}
         />
 
-        <main className={`app-workspace-content flex-1 min-w-0 min-h-0 ${activeTab === 'dashboard' ? 'app-workspace-content--dark p-0 overflow-y-auto' : activeTab === 'inbox' ? 'p-0 overflow-hidden flex flex-col' : activeTab === 'agent' ? 'p-0 overflow-hidden flex flex-col' : 'p-3 sm:p-5 overflow-y-auto'}`}>
+        <main className={`app-workspace-content flex-1 min-w-0 min-h-0 ${activeTab === 'dashboard' ? 'app-workspace-content--dark p-0 overflow-y-auto app-workspace-content--standalone' : activeTab === 'inbox' ? 'p-0 overflow-hidden flex flex-col app-workspace-content--standalone' : activeTab === 'agent' ? 'p-0 overflow-hidden flex flex-col app-workspace-content--standalone' : 'p-3 sm:p-5 overflow-y-auto app-workspace-content--with-module-nav'}`}>
         {entitlements?.billing?.status === 'past_due' && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
             <span>

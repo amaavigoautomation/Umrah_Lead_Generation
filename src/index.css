@@ -4788,29 +4788,10 @@
 
 
 /* --------------------------------------------------------------------------
-   Platform-wide ActiveCampaign-style module frame.
-   App.tsx explicitly labels routes with or without secondary module navigation.
-   This avoids descendant/sibling selector assumptions and keeps the exact
-   same frame on every route.
+   Platform-wide workspace perimeter.
+   The class is applied directly to the content <main> by App.tsx so every
+   route gets the exact edge treatment, independent of parent selector depth.
    -------------------------------------------------------------------------- */
-.app-primary-nav-rail {
-  box-sizing: border-box;
-  border-right: 1px solid rgba(255,255,255,.13);
-  border-bottom: 1px solid rgba(255,255,255,.10);
-}
-
-.app-header-shell {
-  flex: 0 0 auto;
-  border: 0;
-  background: transparent;
-}
-
-.app-global-topbar {
-  box-sizing: border-box;
-  border-bottom: 1px solid rgba(255,255,255,.12);
-  border-radius: 0 !important;
-}
-
 .app-main-frame {
   position: relative;
   display: flex;
@@ -4824,9 +4805,31 @@
   background: transparent;
 }
 
-/* Routes with secondary horizontal navigation:
-   nav creates the top corners and its bottom line; module canvas continues
-   the side borders and closes the same frame with rounded bottom corners. */
+/* Standalone canvas: Home, Unified Inbox and AI Agent. */
+.app-workspace-content--standalone {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid #e1e7f0 !important;
+  border-radius: 12px !important;
+  clip-path: inset(0 round 12px);
+}
+
+/* Modules with their own horizontal navigation: only the main bottom edge
+   is rounded here; the navigation row supplies the two top outer corners. */
+.app-workspace-content--with-module-nav {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid #e1e7f0 !important;
+  border-bottom: 1px solid #e1e7f0 !important;
+  border-left: 1px solid #e1e7f0 !important;
+  border-top: 0 !important;
+  border-radius: 0 0 12px 12px !important;
+  clip-path: inset(0 round 0 0 12px 12px);
+}
+
+/* The horizontal navigation row forms the matching top edge. */
 .app-main-frame--with-module-nav .app-workspace-nav-frame {
   box-sizing: border-box;
   flex: 0 0 auto;
@@ -4837,45 +4840,23 @@
   background: #fff;
 }
 
-.app-main-frame--with-module-nav > .app-workspace-content {
-  box-sizing: border-box;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  border-top: 0 !important;
-  border-right: 1px solid #e1e7f0 !important;
-  border-bottom: 1px solid #e1e7f0 !important;
-  border-left: 1px solid #e1e7f0 !important;
-  border-radius: 0 0 12px 12px !important;
-  background-clip: padding-box;
-}
-
-/* Routes without secondary navigation use one complete rounded frame. */
-.app-main-frame--standalone > .app-workspace-content {
-  box-sizing: border-box;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  border: 1px solid #e1e7f0 !important;
-  border-radius: 12px !important;
-  background-clip: padding-box;
-}
-
-/* Dashboard retains its dark surface and matching subtle dark perimeter. */
-.app-main-frame--dark > .app-workspace-content {
+/* Preserve the Home module's dark surface and perimeter colour. */
+.app-workspace-content--dark {
   border-color: #2b3454 !important;
 }
 
 @media (max-width: 767px) {
+  .app-workspace-content--standalone {
+    border-radius: 10px !important;
+    clip-path: inset(0 round 10px);
+  }
+
+  .app-workspace-content--with-module-nav {
+    border-radius: 0 0 10px 10px !important;
+    clip-path: inset(0 round 0 0 10px 10px);
+  }
+
   .app-main-frame--with-module-nav .app-workspace-nav-frame {
     border-radius: 10px 10px 0 0 !important;
-  }
-
-  .app-main-frame--with-module-nav > .app-workspace-content {
-    border-radius: 0 0 10px 10px !important;
-  }
-
-  .app-main-frame--standalone > .app-workspace-content {
-    border-radius: 10px !important;
   }
 }

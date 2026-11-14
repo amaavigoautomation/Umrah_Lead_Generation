@@ -224,7 +224,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
     setModuleQuery('');
   };
   const firstName = (currentUser?.name || currentUser?.email || 'User').trim();
-  const initials = firstName.split(/\\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'U';
+  const initials = firstName.trim().split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'U';
   const billingStatus = entitlements?.billing?.status || '';
   const rawPlanName = entitlements?.planName || currentTenant?.planName || currentTenant?.plan || '';
   const formattedPlanName = rawPlanName

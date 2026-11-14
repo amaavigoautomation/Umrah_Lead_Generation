@@ -383,7 +383,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
           <div className="mt-4 space-y-1">
             {activity.map((row) => (
-              <button key={row.label} type="button" onClick={() => onNavigate(row.tab)} className="group flex w-full items-center gap-3 rounded-xl px-2.5 py-3 text-left transition hover:bg-slate-50">
+              <button key={row.label} type="button" onClick={() => onNavigate(row.tab)} className="dashboard-activity-row group flex w-full items-center gap-3 rounded-xl border border-transparent px-2.5 py-3 text-left transition">
                 <span className={'dashboard-card-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ' + row.tone}>{row.icon}</span>
                 <span className="min-w-0 flex-1"><span className="dashboard-activity-label block text-xs font-bold text-slate-800">{row.label}</span><span className="dashboard-activity-description mt-0.5 block truncate text-[11px] text-slate-400">{row.description}</span></span>
                 <span className="dashboard-activity-value text-sm font-bold tabular-nums text-[#080b32]">{row.count === null ? '—' : row.count.toLocaleString('en-IN')}</span><ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5" />
@@ -453,7 +453,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               const name = (contact as any)?.fullName || [contact?.firstName, contact?.lastName].filter(Boolean).join(' ') || contact?.companyName || 'Unnamed lead';
               const subline = contact?.email || contact?.phone || lead.source || 'CRM lead';
               const updated = lead.updatedAt || lead.lastActivityAt || lead.createdAt;
-              return <button key={lead.leadId} type="button" onClick={() => onOpenLead(lead.leadId)} className="grid w-full grid-cols-[minmax(0,1fr)_100px_90px_54px] items-center gap-3 px-5 py-3 text-left transition hover:bg-slate-50 max-sm:grid-cols-[minmax(0,1fr)_76px_48px]">
+              return <button key={lead.leadId} type="button" onClick={() => onOpenLead(lead.leadId)} className="dashboard-recent-row grid w-full grid-cols-[minmax(0,1fr)_100px_90px_54px] items-center gap-3 border border-transparent px-5 py-3 text-left transition max-sm:grid-cols-[minmax(0,1fr)_76px_48px]">
                 <span className="min-w-0"><span className="dashboard-recent-name block truncate text-xs font-bold text-slate-800">{name}</span><span className="dashboard-recent-meta mt-0.5 block truncate text-[10px] uppercase tracking-wide text-slate-400">{subline}</span></span>
                 <span className="max-sm:hidden"><span className={'inline-flex max-w-full truncate rounded-full border px-2.5 py-1 text-[9px] font-bold ' + statusTone(lead.status)}>{readableStatus(lead.status)}</span></span>
                 <span className="dashboard-recent-date text-[11px] text-slate-500">{shortDate(updated)}</span><span className="dashboard-recent-score text-right text-xs font-bold tabular-nums text-[#080b32]">{Number(lead.leadScore) || 0}</span>

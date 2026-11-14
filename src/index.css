@@ -4736,3 +4736,52 @@
     white-space:normal;
   }
 }
+
+
+/* Dashboard clickable rows: retain readable light text on the dark Home cards. */
+.dashboard-home-view .dashboard-activity-row,
+.dashboard-home-view .dashboard-recent-row {
+  border-color:transparent;
+  background:transparent;
+}
+.dashboard-home-view .dashboard-activity-row:hover,
+.dashboard-home-view .dashboard-recent-row:hover {
+  border-color:rgba(129,161,224,.16)!important;
+  background:#19264a!important;
+}
+.dashboard-home-view .dashboard-activity-row:focus-visible,
+.dashboard-home-view .dashboard-recent-row:focus-visible {
+  outline:2px solid rgba(120,156,255,.65);
+  outline-offset:1px;
+  background:#19264a!important;
+}
+.dashboard-home-view .dashboard-activity-row:hover .dashboard-activity-label,
+.dashboard-home-view .dashboard-recent-row:hover .dashboard-recent-name,
+.dashboard-home-view .dashboard-activity-row:focus-visible .dashboard-activity-label,
+.dashboard-home-view .dashboard-recent-row:focus-visible .dashboard-recent-name {
+  color:#ffffff!important;
+}
+.dashboard-home-view .dashboard-activity-row:hover .dashboard-activity-description,
+.dashboard-home-view .dashboard-recent-row:hover .dashboard-recent-meta,
+.dashboard-home-view .dashboard-recent-row:hover .dashboard-recent-date,
+.dashboard-home-view .dashboard-activity-row:focus-visible .dashboard-activity-description,
+.dashboard-home-view .dashboard-recent-row:focus-visible .dashboard-recent-meta,
+.dashboard-home-view .dashboard-recent-row:focus-visible .dashboard-recent-date {
+  color:#c2cee5!important;
+}
+.dashboard-home-view .dashboard-activity-row:hover .dashboard-activity-value,
+.dashboard-home-view .dashboard-recent-row:hover .dashboard-recent-score,
+.dashboard-home-view .dashboard-activity-row:focus-visible .dashboard-activity-value,
+.dashboard-home-view .dashboard-recent-row:focus-visible .dashboard-recent-score {
+  color:#ffffff!important;
+}
+.dashboard-home-view .dashboard-activity-row:hover > svg:last-child,
+.dashboard-home-view .dashboard-recent-row:hover > svg:last-child {
+  color:#c2d3ff!important;
+}
+@media (prefers-reduced-motion:reduce) {
+  .dashboard-home-view .dashboard-activity-row,
+  .dashboard-home-view .dashboard-recent-row {
+    transition:none;
+  }
+}

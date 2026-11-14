@@ -356,7 +356,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   const popoverButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[.045] text-slate-300 transition hover:border-white/20 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400';
 
   return (
-    <header className="sticky top-0 z-30 shrink-0 border-b-0 bg-white">
+    <header className="app-header-shell sticky top-0 z-30 shrink-0 border-b-0 bg-white">
       <div className="app-global-topbar flex min-h-[56px] items-center justify-between gap-4 bg-[#05051f] px-4 text-white sm:px-6">
         <div className="flex min-w-0 items-center gap-4">
           <div className="min-w-0">

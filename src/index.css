@@ -4788,9 +4788,9 @@
 
 
 /* --------------------------------------------------------------------------
-   Platform-wide application frame.
-   The same rounded perimeter is applied around the complete module workspace,
-   not only around the Dashboard. All logged-in modules render inside this shell.
+   ActiveCampaign-style application workspace frame.
+   The dark global header stays square/full-width; the content area BELOW it
+   receives one continuous rounded perimeter on all modules.
    -------------------------------------------------------------------------- */
 .app-primary-nav-rail {
   box-sizing: border-box;
@@ -4798,60 +4798,83 @@
   border-bottom: 1px solid rgba(255,255,255,.10);
 }
 
+.app-header-shell {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+}
+
 .app-global-topbar {
   box-sizing: border-box;
   border-bottom: 1px solid rgba(255,255,255,.12);
-  border-radius: 11px 11px 0 0;
+  border-radius: 0 !important;
 }
 
+/* Shell itself is only a layout container. The rounded frame begins after
+   the topbar, matching the reference image instead of rounding the dark bar. */
 .app-main-frame {
   position: relative;
-  box-sizing: border-box;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
-  border: 1px solid #dfe5ee;
-  border-radius: 12px;
-  background-clip: padding-box;
-}
-
-.app-main-frame--dark {
-  border-color: #2b3454;
-}
-
-/* Header navigation is an internal divider, not a second outer card. */
-.app-workspace-nav-frame {
-  box-sizing: border-box;
+  overflow: hidden;
   border: 0 !important;
-  border-bottom: 1px solid #e1e7f0 !important;
   border-radius: 0 !important;
-  margin: 0;
+  background: transparent;
+}
+
+/* Modules which have their own horizontal navigation: the navigation row
+   supplies the top edge and rounded top corners of the shared frame. */
+.app-header-shell:has(.app-workspace-nav-frame) .app-workspace-nav-frame {
+  box-sizing: border-box;
+  min-height: 48px;
+  margin: 0 !important;
+  border: 1px solid #e1e7f0 !important;
+  border-bottom: 1px solid #e1e7f0 !important;
+  border-radius: 12px 12px 0 0 !important;
   background: #fff;
 }
 
-/* The module canvas fills the shared shell; the outer shell owns its perimeter. */
-.app-workspace-content {
+/* The module canvas supplies the side and footer edges of that same frame. */
+.app-header-shell:has(.app-workspace-nav-frame) + .app-workspace-content {
   box-sizing: border-box;
   min-width: 0;
   min-height: 0;
   border: 0 !important;
-  border-radius: 0 0 11px 11px !important;
+  border-right: 1px solid #e1e7f0 !important;
+  border-bottom: 1px solid #e1e7f0 !important;
+  border-left: 1px solid #e1e7f0 !important;
+  border-radius: 0 0 12px 12px !important;
   background-clip: padding-box;
 }
 
-.app-workspace-content--dark {
-  border-color: transparent !important;
+/* Dashboard, Unified Inbox, AI Agent and any module without a sub-navigation
+   row receive the complete rounded perimeter around the module itself. */
+.app-header-shell:not(:has(.app-workspace-nav-frame)) + .app-workspace-content {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid #e1e7f0 !important;
+  border-radius: 12px !important;
+  background-clip: padding-box;
+}
+
+/* Keep the dark Dashboard's original dark surface and use a subtle dark edge. */
+.app-workspace-content--dark,
+.app-header-shell:not(:has(.app-workspace-nav-frame)) + .app-workspace-content--dark {
+  border-color: #2b3454 !important;
 }
 
 @media (max-width: 767px) {
-  .app-main-frame {
-    border-radius: 10px;
+  .app-header-shell:has(.app-workspace-nav-frame) .app-workspace-nav-frame {
+    border-radius: 10px 10px 0 0 !important;
   }
-
-  .app-global-topbar {
-    border-radius: 9px 9px 0 0;
+  .app-header-shell:has(.app-workspace-nav-frame) + .app-workspace-content {
+    border-radius: 0 0 10px 10px !important;
   }
-
-  .app-workspace-content {
-    border-radius: 0 0 9px 9px !important;
+  .app-header-shell:not(:has(.app-workspace-nav-frame)) + .app-workspace-content {
+    border-radius: 10px !important;
   }
 }

@@ -119,7 +119,6 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   allTenants = [],
   onSwitchTenant,
   hideModuleNavigation = false,
-  contactCount = 0,
   entitlements,
   planLocked,
 }) => {

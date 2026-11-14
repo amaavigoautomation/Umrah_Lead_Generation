@@ -4785,3 +4785,26 @@
     transition:none;
   }
 }
+
+
+/* Shared workspace frame: ActiveCampaign-style curved edge and restrained perimeter rules.
+   Applied once to the main content area so every module receives the same finish. */
+.app-workspace-content {
+  min-width:0;
+  min-height:0;
+  border:1px solid #e1e7f0;
+  border-radius:12px;
+  background-clip:padding-box;
+}
+.app-workspace-content--dark {
+  border-color:#2b3454;
+}
+@media(max-width:767px) {
+  .app-workspace-content {
+    border-radius:10px;
+    border-color:#e1e7f0;
+  }
+  .app-workspace-content--dark {
+    border-color:#2b3454;
+  }
+}

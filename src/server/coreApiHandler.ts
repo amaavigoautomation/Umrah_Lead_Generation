@@ -88,6 +88,7 @@ import {
   verifyGoogleCalendarConnection,
 } from './demoSchedulingService.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
+import { searchTenantWorkspace } from './globalSearchService.js';
 import { db } from './adminFirestore.js';
 import { getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, doc, query as fsQuery, where as fsWhere, countDocs, sumDocs } from './adminFirestore.js';
 import { safeSetDoc } from './firestoreUtils.js';
@@ -1070,6 +1071,35 @@ export async function handleCoreApi(req: any, res: any): Promise<boolean> {
       res.end(JSON.stringify({ error: err?.message || 'Brand request failed' }));
       return true;
     }
+  }
+
+  // Global Search: all searchable records are queried inside the authenticated tenant scope.
+  if (url === '/api/search' && req.method === 'GET') {
+    const searchParams = new URL(req.url || '/', 'http://localhost').searchParams;
+    const searchQuery = String(searchParams.get('q') || '').trim().slice(0, 100);
+    if (searchQuery.length < 2) {
+      res.statusCode = 200;
+      res.end(JSON.stringify({ query: searchQuery, results: [], total: 0, truncated: false }));
+      return true;
+    }
+    try {
+      let allowedModules: string[] = [];
+      if (activeTenantCtx.role !== 'admin' && !activeTenantCtx.isPlatformAdmin) {
+        const userSnap = await getDoc(globalUserDoc(userUid)).catch(() => null);
+        if (userSnap?.exists()) {
+          const profile = userSnap.data() as Record<string, any>;
+          allowedModules = Array.isArray(profile.allowedModules) ? profile.allowedModules.map(String) : [];
+        }
+      }
+      const result = await searchTenantWorkspace(activeTenantCtx, searchQuery, allowedModules);
+      res.statusCode = 200;
+      res.end(JSON.stringify(result));
+    } catch (error: any) {
+      console.error('[Global Search] Search failed:', error?.message || error);
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: 'Global search is temporarily unavailable.' }));
+    }
+    return true;
   }
 
   // Tenant Usage Metrics: /api/tenants/:tenantId/usage

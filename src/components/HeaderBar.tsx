@@ -129,10 +129,15 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   const workspaceName = brand.companyName || currentTenant?.name || 'UMRAH360';
   const [activePopover, setActivePopover] = useState<'search' | 'help' | 'account' | null>(null);
   const [appsExpanded, setAppsExpanded] = useState(false);
-  const [moduleQuery, setModuleQuery] = useState('');
+  const [globalQuery, setGlobalQuery] = useState('');
+  const [globalResults, setGlobalResults] = useState<any[]>([]);
+  const [globalLoading, setGlobalLoading] = useState(false);
+  const [globalError, setGlobalError] = useState('');
+  const [globalCategory, setGlobalCategory] = useState('All');
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [usage, setUsage] = useState<{ dailyEmailsSent: number; dailyEmailLimit: number; monthlyAiTokens: number; monthlyAiTokenLimit: number } | null>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
-  const moduleSearchRef = useRef<HTMLInputElement>(null);
+  const globalSearchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!tenantId) {
@@ -195,8 +200,70 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   }, [activePopover]);
 
   useEffect(() => {
-    if (activePopover === 'search') moduleSearchRef.current?.focus();
+    if (activePopover === 'search') globalSearchRef.current?.focus();
   }, [activePopover]);
+
+  useEffect(() => {
+    const onShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setActivePopover('search');
+        setAppsExpanded(false);
+      }
+    };
+    window.addEventListener('keydown', onShortcut);
+    return () => window.removeEventListener('keydown', onShortcut);
+  }, []);
+
+  useEffect(() => {
+    const term = globalQuery.trim();
+    if (activePopover !== 'search' || term.length < 2) {
+      setGlobalResults([]);
+      setGlobalLoading(false);
+      setGlobalError('');
+      return;
+    }
+    let cancelled = false;
+    const controller = new AbortController();
+    setGlobalLoading(true);
+    setGlobalError('');
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(term)}`, { signal: controller.signal });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data?.error || 'Search failed');
+        if (!cancelled) setGlobalResults(Array.isArray(data.results) ? data.results : []);
+      } catch (error: any) {
+        if (!cancelled && error?.name !== 'AbortError') {
+          setGlobalError(error?.message || 'Could not search this workspace.');
+          setGlobalResults([]);
+        }
+      } finally {
+        if (!cancelled) setGlobalLoading(false);
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [globalQuery, activePopover, tenantId]);
+
+  const globalCategories = useMemo(() => {
+    const categories = Array.from(new Set(globalResults.map((item) => item.category)));
+    return ['All', ...categories];
+  }, [globalResults]);
+  const visibleGlobalResults = useMemo(() =>
+    globalCategory === 'All' ? globalResults : globalResults.filter((item) => item.category === globalCategory),
+    [globalResults, globalCategory]
+  );
+  const openGlobalResult = (item: any) => {
+    setActiveTab(item.module as ActiveTab);
+    setActivePopover(null);
+    setGlobalQuery('');
+    setGlobalCategory('All');
+    window.dispatchEvent(new CustomEvent('umrah360:global-search-result', { detail: item }));
+  };
 
   const availableApps = useMemo(() => {
     const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.accessLevel === 'ALL';
@@ -298,7 +365,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           )}
 
           <div ref={actionsRef} className="relative ml-1 flex shrink-0 items-center gap-1.5 sm:gap-2">
-            <button type="button" onClick={() => openPopover('search')} className={popoverButtonClass} title="Search apps" aria-label="Search apps">
+            <button type="button" onClick={() => openPopover('search')} className={popoverButtonClass} title="Global search" aria-label="Global search">
               <Search className="h-4 w-4" />
             </button>
             <button type="button" onClick={() => openPopover('help')} className={popoverButtonClass} title="Help and shortcuts" aria-label="Help and shortcuts">
@@ -313,25 +380,74 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             </button>
 
             {activePopover === 'search' && (
-              <div className="absolute right-0 top-[calc(100%+12px)] z-[70] w-[min(320px,calc(100vw-24px))] overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-800 shadow-[0_18px_50px_rgba(15,23,42,.18)]">
-                <div className="border-b border-slate-100 p-3">
-                  <label htmlFor="header-app-search" className="mb-1.5 block text-[9px] font-bold uppercase tracking-[.12em] text-slate-400">Find a module</label>
-                  <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3">
-                    <Search className="h-4 w-4 text-slate-400" />
-                    <input ref={moduleSearchRef} id="header-app-search" value={moduleQuery} onChange={(event) => setModuleQuery(event.target.value)} placeholder="Search your apps…" className="h-10 min-w-0 flex-1 bg-transparent text-[11px] text-slate-800 outline-none placeholder:text-slate-400" />
-                    {moduleQuery && <button type="button" onClick={() => setModuleQuery('')} aria-label="Clear search" className="rounded p-1 text-slate-400 hover:bg-slate-200"><X className="h-3.5 w-3.5" /></button>}
+              <div className="absolute right-0 top-[calc(100%+12px)] z-[80] w-[min(620px,calc(100vw-24px))] overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-800 shadow-[0_22px_65px_rgba(15,23,42,.24)]">
+                <div className="border-b border-slate-100 p-3.5">
+                  <label htmlFor="global-workspace-search" className="mb-2 block text-[9px] font-bold uppercase tracking-[.14em] text-slate-400">Global workspace search</label>
+                  <div className="flex items-center gap-2 rounded-lg border border-[#b8ccff] bg-slate-50 px-3 shadow-[0_0_0_3px_rgba(21,94,239,.06)]">
+                    <Search className="h-4 w-4 shrink-0 text-[#155eef]" />
+                    <input
+                      ref={globalSearchRef}
+                      id="global-workspace-search"
+                      value={globalQuery}
+                      onChange={(event) => { setGlobalQuery(event.target.value); setGlobalCategory('All'); }}
+                      onKeyDown={(event) => { if (event.key === 'Escape') setActivePopover(null); }}
+                      placeholder="Search leads, conversations, campaigns, documents…"
+                      className="h-11 min-w-0 flex-1 bg-transparent text-[12px] text-slate-800 outline-none placeholder:text-slate-400"
+                    />
+                    {globalQuery && <button type="button" onClick={() => { setGlobalQuery(''); setGlobalResults([]); globalSearchRef.current?.focus(); }} aria-label="Clear search" className="rounded p-1 text-slate-400 hover:bg-slate-200"><X className="h-3.5 w-3.5" /></button>}
+                    <kbd className="hidden rounded border border-slate-200 bg-white px-1.5 py-1 text-[9px] font-semibold text-slate-400 sm:inline">ESC</kbd>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="text-[9px] text-slate-400">Search across records you have permission to access</span>
+                    <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] font-semibold text-slate-400">Ctrl K</kbd>
                   </div>
                 </div>
-                <div className="max-h-[300px] overflow-y-auto p-2">
-                  {filteredApps.length ? filteredApps.map((item) => (
-                    <button key={item.id} type="button" onClick={() => navigateAndClose(item.id)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[11px] font-semibold text-slate-700 transition hover:bg-blue-50 hover:text-[#155eef]">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500">{item.icon}</span>{item.label}
-                    </button>
-                  )) : <p className="px-3 py-6 text-center text-[10px] text-slate-400">No matching apps found.</p>}
+
+                <div className="max-h-[min(65vh,520px)] overflow-y-auto p-2">
+                  {!globalQuery.trim() ? (
+                    <div className="px-3 py-7 text-center">
+                      <Search className="mx-auto mb-2 h-6 w-6 text-slate-300" />
+                      <p className="text-[11px] font-semibold text-slate-600">Search your entire workspace</p>
+                      <p className="mt-1 text-[10px] text-slate-400">Find leads, contacts, conversations, campaigns, templates and knowledge articles.</p>
+                      {recentSearches.length > 0 && <div className="mx-auto mt-4 max-w-sm text-left"><p className="mb-2 text-[9px] font-bold uppercase tracking-wider text-slate-400">Recent searches</p>{recentSearches.map((term) => <button key={term} type="button" onClick={() => setGlobalQuery(term)} className="mr-1.5 mb-1.5 rounded-full border border-slate-200 px-2.5 py-1 text-[10px] text-slate-600 hover:border-blue-200 hover:bg-blue-50">{term}</button>)}</div>}
+                    </div>
+                  ) : globalQuery.trim().length < 2 ? (
+                    <p className="px-3 py-7 text-center text-[10px] text-slate-400">Type at least 2 characters to search.</p>
+                  ) : globalLoading ? (
+                    <div className="flex items-center justify-center gap-2 px-3 py-9 text-[11px] text-slate-500"><span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-[#155eef]" /> Searching your workspace…</div>
+                  ) : globalError ? (
+                    <div className="px-3 py-8 text-center"><p className="text-[11px] font-semibold text-rose-600">{globalError}</p><button type="button" onClick={() => setGlobalQuery((value) => value)} className="mt-2 text-[10px] font-semibold text-[#155eef]">Try again</button></div>
+                  ) : globalResults.length === 0 ? (
+                    <div className="px-3 py-8 text-center"><p className="text-[11px] font-semibold text-slate-600">No results found</p><p className="mt-1 text-[10px] text-slate-400">Try another name, email, phone number or keyword.</p></div>
+                  ) : (
+                    <>
+                      <div className="sticky top-0 z-10 mb-1 flex items-center gap-1 overflow-x-auto bg-white px-1 pb-2 pt-1 [scrollbar-width:none]">
+                        {globalCategories.map((category) => (
+                          <button key={category} type="button" onClick={() => setGlobalCategory(category)} className={`shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-semibold transition ${globalCategory === category ? 'border-[#cbd8ff] bg-[#eaf0ff] text-[#155eef]' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>{category}</button>
+                        ))}
+                      </div>
+                      {visibleGlobalResults.map((item) => (
+                        <button key={item.id} type="button" onClick={() => { setRecentSearches((items) => [globalQuery.trim(), ...items.filter((value) => value !== globalQuery.trim())].slice(0, 5)); openGlobalResult(item); }} className="group flex w-full items-start gap-3 rounded-lg px-3 py-3 text-left transition hover:bg-blue-50">
+                          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 group-hover:bg-blue-100 group-hover:text-[#155eef]">
+                            {item.module === 'crm' ? <Users className="h-4 w-4" /> : item.module === 'inbox' ? <Inbox className="h-4 w-4" /> : item.module === 'campaigns' ? <Send className="h-4 w-4" /> : item.module === 'knowledge' ? <BookOpen className="h-4 w-4" /> : item.module === 'database' ? <Database className="h-4 w-4" /> : item.module === 'workspace' ? <Building2 className="h-4 w-4" /> : <Mail className="h-4 w-4" />}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-2"><span className="truncate text-[11px] font-bold text-slate-800 group-hover:text-[#155eef]">{item.title}</span><span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[8px] font-semibold text-slate-500">{item.category}</span></span>
+                            <span className="mt-0.5 block truncate text-[10px] text-slate-500">{item.subtitle}</span>
+                            {item.snippet && <span className="mt-1 block line-clamp-2 text-[10px] leading-relaxed text-slate-400">{item.snippet}</span>}
+                          </span>
+                          <ChevronRight className="mt-2 h-3.5 w-3.5 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-[#155eef]" />
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/80 px-3 py-2">
+                  <span className="text-[9px] text-slate-400">{globalResults.length ? `${visibleGlobalResults.length} result(s) shown` : 'Workspace-wide search'}</span>
+                  <button type="button" onClick={() => setActivePopover(null)} className="rounded-md px-2 py-1 text-[9px] font-semibold text-slate-500 hover:bg-slate-200">Close</button>
                 </div>
               </div>
             )}
-
             {activePopover === 'help' && (
               <div className="absolute right-0 top-[calc(100%+12px)] z-[70] w-[min(285px,calc(100vw-24px))] rounded-xl border border-slate-200 bg-white p-3 text-slate-800 shadow-[0_18px_50px_rgba(15,23,42,.18)]">
                 <div className="mb-2">

@@ -12,6 +12,8 @@ export interface GlobalSearchResult {
   snippet: string;
   module: SearchModule;
   recordId: string;
+  recordType: string;
+  relatedId?: string;
   updatedAt?: string;
 }
 
@@ -100,17 +102,17 @@ export async function searchTenantWorkspace(
   const repo = tenantRepo(ctx);
   const isAdmin = ctx.role === 'admin' || ctx.isPlatformAdmin === true;
   const allowed = new Set(allowedModules);
-  const specs: Array<{ category: string; module: SearchModule; ref: any; title: string[]; subtitle: string[]; content: string[]; date: string[] }> = [
-    { category: 'Leads & Contacts', module: 'crm', ref: repo.leads(), title: ['name', 'fullName', 'contactName'], subtitle: ['email', 'phone', 'companyName', 'company'], content: ['name', 'fullName', 'email', 'phone', 'mobile', 'companyName', 'company', 'city', 'country', 'source', 'notes', 'queryMessage', 'designation'], date: ['updatedAt', 'createdAt'] },
-    { category: 'Leads & Contacts', module: 'crm', ref: repo.contacts(), title: ['name', 'fullName', 'contactName'], subtitle: ['email', 'phone', 'companyName', 'company'], content: ['name', 'fullName', 'email', 'phone', 'mobile', 'companyName', 'company', 'city', 'country', 'notes'], date: ['updatedAt', 'createdAt'] },
-    { category: 'Conversations', module: 'inbox', ref: repo.conversations(), title: ['contactName', 'leadName', 'name', 'subject'], subtitle: ['channel', 'email', 'phone', 'contactEmail'], content: ['contactName', 'leadName', 'name', 'subject', 'email', 'phone', 'lastMessage', 'lastMessageText', 'preview', 'snippet', 'channel'], date: ['lastMessageAt', 'updatedAt', 'createdAt'] },
-    { category: 'Conversations', module: 'inbox', ref: repo.messages(), title: ['subject', 'contactName', 'fromName'], subtitle: ['channel', 'from', 'to', 'email'], content: ['subject', 'text', 'body', 'html', 'content', 'message', 'from', 'to', 'email', 'contactName'], date: ['createdAt', 'timestamp', 'sentAt'] },
-    { category: 'Campaigns', module: 'campaigns', ref: repo.outboundCampaigns(), title: ['name', 'campaignName', 'title'], subtitle: ['status', 'channel', 'type'], content: ['name', 'campaignName', 'title', 'description', 'status', 'subject', 'previewText'], date: ['updatedAt', 'createdAt'] },
-    { category: 'Campaigns', module: 'campaigns', ref: repo.campaigns(), title: ['name', 'campaignName', 'title'], subtitle: ['status', 'channel', 'type'], content: ['name', 'campaignName', 'title', 'description', 'status', 'subject'], date: ['updatedAt', 'createdAt'] },
-    { category: 'Email & WhatsApp Templates', module: 'email-design-studio', ref: repo.emailTemplates(), title: ['name', 'title', 'templateName'], subtitle: ['type', 'channel', 'status'], content: ['name', 'title', 'templateName', 'subject', 'description', 'html', 'body', 'content'], date: ['updatedAt', 'createdAt'] },
-    { category: 'Knowledge Base', module: 'knowledge', ref: repo.knowledgeDocuments(), title: ['title', 'name'], subtitle: ['category', 'source', 'status'], content: ['title', 'name', 'content', 'text', 'summary', 'description', 'url'], date: ['updatedAt', 'createdAt'] },
-    { category: 'Lead Database', module: 'database', ref: repo.leadDatabaseEntries(), title: ['name', 'companyName'], subtitle: ['email', 'phone', 'sourceDatabaseName'], content: ['name', 'email', 'phone', 'companyName', 'website', 'designation', 'city', 'country'], date: ['updatedAt', 'createdAt'] },
-    { category: 'Activities & Follow-ups', module: 'crm', ref: repo.leadActivities(), title: ['title', 'subject', 'leadName', 'contactName'], subtitle: ['type', 'status', 'assignedToName'], content: ['title', 'subject', 'leadName', 'contactName', 'description', 'notes', 'type', 'status'], date: ['updatedAt', 'createdAt', 'dueAt'] },
+  const specs: Array<{ category: string; module: SearchModule; recordType: string; ref: any; title: string[]; subtitle: string[]; content: string[]; date: string[] }> = [
+    { category: 'Leads & Contacts', module: 'crm', recordType: 'lead', ref: repo.leads(), title: ['name', 'fullName', 'contactName'], subtitle: ['email', 'phone', 'companyName', 'company'], content: ['name', 'fullName', 'email', 'phone', 'mobile', 'companyName', 'company', 'city', 'country', 'source', 'notes', 'queryMessage', 'designation'], date: ['updatedAt', 'createdAt'] },
+    { category: 'Leads & Contacts', module: 'crm', recordType: 'contact', ref: repo.contacts(), title: ['name', 'fullName', 'contactName'], subtitle: ['email', 'phone', 'companyName', 'company'], content: ['name', 'fullName', 'email', 'phone', 'mobile', 'companyName', 'company', 'city', 'country', 'notes'], date: ['updatedAt', 'createdAt'] },
+    { category: 'Conversations', module: 'inbox', recordType: 'conversation', ref: repo.conversations(), title: ['contactName', 'leadName', 'name', 'subject'], subtitle: ['channel', 'email', 'phone', 'contactEmail'], content: ['contactName', 'leadName', 'name', 'subject', 'email', 'phone', 'lastMessage', 'lastMessageText', 'preview', 'snippet', 'channel'], date: ['lastMessageAt', 'updatedAt', 'createdAt'] },
+    { category: 'Conversations', module: 'inbox', recordType: 'message', ref: repo.messages(), title: ['subject', 'contactName', 'fromName'], subtitle: ['channel', 'from', 'to', 'email'], content: ['subject', 'text', 'body', 'html', 'content', 'message', 'from', 'to', 'email', 'contactName'], date: ['createdAt', 'timestamp', 'sentAt'] },
+    { category: 'Campaigns', module: 'campaigns', recordType: 'campaign', ref: repo.outboundCampaigns(), title: ['name', 'campaignName', 'title'], subtitle: ['status', 'channel', 'type'], content: ['name', 'campaignName', 'title', 'description', 'status', 'subject', 'previewText'], date: ['updatedAt', 'createdAt'] },
+    { category: 'Campaigns', module: 'campaigns', recordType: 'campaign', ref: repo.campaigns(), title: ['name', 'campaignName', 'title'], subtitle: ['status', 'channel', 'type'], content: ['name', 'campaignName', 'title', 'description', 'status', 'subject'], date: ['updatedAt', 'createdAt'] },
+    { category: 'Email & WhatsApp Templates', module: 'email-design-studio', recordType: 'template', ref: repo.emailTemplates(), title: ['name', 'title', 'templateName'], subtitle: ['type', 'channel', 'status'], content: ['name', 'title', 'templateName', 'subject', 'description', 'html', 'body', 'content'], date: ['updatedAt', 'createdAt'] },
+    { category: 'Knowledge Base', module: 'knowledge', recordType: 'knowledge-document', ref: repo.knowledgeDocuments(), title: ['title', 'name'], subtitle: ['category', 'source', 'status'], content: ['title', 'name', 'content', 'text', 'summary', 'description', 'url'], date: ['updatedAt', 'createdAt'] },
+    { category: 'Lead Database', module: 'database', recordType: 'database-entry', ref: repo.leadDatabaseEntries(), title: ['name', 'companyName'], subtitle: ['email', 'phone', 'sourceDatabaseName'], content: ['name', 'email', 'phone', 'companyName', 'website', 'designation', 'city', 'country'], date: ['updatedAt', 'createdAt'] },
+    { category: 'Activities & Follow-ups', module: 'crm', recordType: 'activity', ref: repo.leadActivities(), title: ['title', 'subject', 'leadName', 'contactName'], subtitle: ['type', 'status', 'assignedToName'], content: ['title', 'subject', 'leadName', 'contactName', 'description', 'notes', 'type', 'status'], date: ['updatedAt', 'createdAt', 'dueAt'] },
   ];
 
   const visibleSpecs = specs.filter((spec) => canSearchModule(spec.module, allowed, isAdmin));
@@ -143,6 +145,8 @@ export async function searchTenantWorkspace(
         snippet: makeSnippet(row.data, spec.content, term),
         module: spec.module,
         recordId: row.id,
+        recordType: spec.recordType,
+        ...((row.data.conversationId || row.data.leadId || row.data.contactId) ? { relatedId: String(row.data.conversationId || row.data.leadId || row.data.contactId) } : {}),
         ...(updatedAt ? { updatedAt } : {}),
       });
       categoryCounts.set(spec.category, categoryCount + 1);
@@ -165,6 +169,7 @@ export async function searchTenantWorkspace(
           snippet: pick(data, ['email', 'role']),
           module: 'workspace',
           recordId: doc.id,
+          recordType: 'team-member',
           ...(pick(data, ['updatedAt', 'createdAt']) ? { updatedAt: pick(data, ['updatedAt', 'createdAt']) } : {}),
         });
       }

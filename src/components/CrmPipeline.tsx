@@ -165,6 +165,28 @@ export const CrmPipeline: React.FC<CrmPipelineProps> = ({
     setActiveDrawerLeadId(initialSelectedLeadId || null);
   }, [initialSelectedLeadId]);
 
+  useEffect(() => {
+    const onGlobalSearchResult = (event: Event) => {
+      const detail = (event as CustomEvent<any>).detail;
+      if (!detail || detail.module !== 'crm') return;
+      setSearchQuery(String(detail.title || detail.query || ''));
+      setStageTab('ALL');
+      setDateFilter('ALL');
+      setCallerFilter('ALL');
+      setSourceFilter('ALL');
+      setScoreFilter('ALL');
+      const matchedLead = leads.find((lead) =>
+        lead.leadId === detail.recordId ||
+        lead.leadId === detail.relatedId ||
+        lead.contactId === detail.recordId ||
+        lead.contactId === detail.relatedId
+      );
+      if (matchedLead) setActiveDrawerLeadId(matchedLead.leadId);
+    };
+    window.addEventListener('umrah360:global-search-result', onGlobalSearchResult);
+    return () => window.removeEventListener('umrah360:global-search-result', onGlobalSearchResult);
+  }, [leads]);
+
   // Modals
   const [isAddLeadModalOpen, setIsAddLeadModalOpen] = useState(false);
   const [addLeadMode, setAddLeadMode] = useState<'SINGLE' | 'BULK'>('SINGLE');

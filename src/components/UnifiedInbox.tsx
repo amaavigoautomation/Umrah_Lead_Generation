@@ -110,6 +110,25 @@ export const UnifiedInbox: React.FC<UnifiedInboxProps> = ({
   const [selectedConversationId, setSelectedConversationId] = useState<string>(
     conversations[0]?.conversationId || ''
   );
+  useEffect(() => {
+    const onGlobalSearchResult = (event: Event) => {
+      const detail = (event as CustomEvent<any>).detail;
+      if (!detail || detail.module !== 'inbox') return;
+      const targetId = String(detail.relatedId || detail.recordId || '');
+      const matched = conversations.find((conversation) =>
+        conversation.conversationId === targetId || conversation.conversationId === detail.recordId
+      );
+      setSearchQuery(String(detail.title || detail.query || ''));
+      setChannelFilter('ALL');
+      setStatusFilter('ALL');
+      if (matched) {
+        setSelectedConversationId(matched.conversationId);
+        setIsUnifiedAllPlatforms(false);
+      }
+    };
+    window.addEventListener('umrah360:global-search-result', onGlobalSearchResult);
+    return () => window.removeEventListener('umrah360:global-search-result', onGlobalSearchResult);
+  }, [conversations]);
   const [channelFilter, setChannelFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');

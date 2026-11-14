@@ -42,6 +42,19 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  useEffect(() => {
+    const onGlobalSearchResult = (event: Event) => {
+      const detail = (event as CustomEvent<any>).detail;
+      if (!detail || detail.module !== 'knowledge') return;
+      setSearchQuery(String(detail.title || detail.query || ''));
+      setCategoryFilter('ALL');
+      setStatusFilter('ALL');
+      setSelectedDocId(String(detail.recordId || ''));
+    };
+    window.addEventListener('umrah360:global-search-result', onGlobalSearchResult);
+    return () => window.removeEventListener('umrah360:global-search-result', onGlobalSearchResult);
+  }, []);
+
   const [ragTestQuery, setRagTestQuery] = useState<string>(brand.playbook === 'umrah360' ? 'Does Umrah360 support B2B sub-agents?' : `What does ${brand.companyName} offer?`);
   const [ragResults, setRagResults] = useState<RetrievedChunk[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);

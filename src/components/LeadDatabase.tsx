@@ -135,6 +135,19 @@ export const LeadDatabase: React.FC<Props> = ({ isAdmin = false, tenantId = '' }
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const cursorRef = useRef<string | null>(null);
   const [search, setSearch] = useState('');
+  useEffect(() => {
+    const onGlobalSearchResult = (event: Event) => {
+      const detail = (event as CustomEvent<any>).detail;
+      if (!detail || detail.module !== 'database') return;
+      setActiveSection('all-leads');
+      setSelectedDatabase(null);
+      setDatabaseFilter('');
+      setSearch(String(detail.title || detail.query || ''));
+    };
+    window.addEventListener('umrah360:global-search-result', onGlobalSearchResult);
+    return () => window.removeEventListener('umrah360:global-search-result', onGlobalSearchResult);
+  }, []);
+
   const [databaseSearch, setDatabaseSearch] = useState('');
   const [databaseFilter, setDatabaseFilter] = useState('');
   const [isLoading, setIsLoading] = useState(false);

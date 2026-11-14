@@ -2675,7 +2675,7 @@ const [contacts, setContacts] = useState<Contact[]>(() => isFirebaseConfigured ?
         onLogout={handleLogout}
       />
 
-      <div className={"app-main-frame flex-1 flex flex-col min-w-0 h-screen overflow-hidden " + (activeTab === 'dashboard' ? 'app-main-frame--dark' : '')}>
+      <div className={"app-main-frame flex-1 flex flex-col min-w-0 h-screen overflow-hidden " + (activeTab === 'dashboard' ? 'app-main-frame--dark ' : '') + (activeTab === 'inbox' || activeTab === 'dashboard' || activeTab === 'agent' ? 'app-main-frame--standalone' : 'app-main-frame--with-module-nav')}>
 <HeaderBar
           activeTab={activeTab}
           setActiveTab={setActiveTab}
